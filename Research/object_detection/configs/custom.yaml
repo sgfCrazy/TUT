@@ -1,0 +1,47 @@
+num_classes: 10
+trainer:
+  device: cuda
+  start_iter: 0
+  max_iter: 10
+model:
+  name: FasterRCNN
+  pixel_mean: [103.530, 116.280, 123.675]
+  backbone:
+    freeze_at: 2
+    resnet:
+      name: build_resnet_backbone
+      depth: 50
+      in_channels: 3
+      out_features:
+        - res4
+      norm: FrozenBN
+      stem_out_channels: 64
+      num_groups: 1
+      width_per_group: 64
+      stride_in_1x1: true
+      res5_dilation: 1
+      res2_out_channels: 256
+  rpn:
+    name: RPN
+    bbox_reg_weights: [1.0, 1.0, 1.0, 1.0]
+    batch_size_per_image: 256
+    positive_fraction: 0.5
+    smooth_l1_beta: 0.0
+    boundary_threshold: -1
+    in_features:
+      - res4
+    iou_thresholds: [0.3, 0.7]
+    iou_labels: [0, -1, 1]
+  anchor_generator:
+    name: DefaultAnchorGenerator
+    sizes:
+      - [32, 64, 128, 256, 512]
+    aspect_ratios:
+      - [0.5, 1.0, 2.0]
+    offset: 0.0
+  roi_heads:
+    name: Res5ROIHeads
+
+
+
+
