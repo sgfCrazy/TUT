@@ -1,10 +1,10 @@
 # from ...wrappers.model import Module
-from typing import Union
-
+from typing import Union, Type, List
+from ...common.shape_spec import ShapeSpec
 from torch import nn
 from .backbone import Backbone
 
-# from torchvision.models import resnet
+from torchvision.models import resnet
 
 """
             downsample = nn.Sequential(
@@ -73,27 +73,32 @@ class BasicStemBlock(nn.Module):
 
 
 class BottleneckBlock(nn.Module):
+    expansion: int = 4
+
     def __init__(self, in_channels, out_channels, use_1x1: bool = False, downsample: bool = False):
         super(BottleneckBlock, self).__init__()
 
+        # out_channels = mid_channels * self.expansion
+        mid_channels = out_channels // self.expansion
+
         self.conv1 = nn.Conv2d(
             in_channels=in_channels,
-            out_channels=out_channels,
+            out_channels=mid_channels,
             kernel_size=1,
             stride=2 if downsample else 1
         )
-        self.bn1 = nn.BatchNorm2d(num_features=in_channels)
+        self.bn1 = nn.BatchNorm2d(num_features=mid_channels)
         self.conv2 = nn.Conv2d(
-            in_channels=in_channels,
-            out_channels=in_channels,
+            in_channels=mid_channels,
+            out_channels=mid_channels,
             kernel_size=3,
-            stride=2,
+            stride=1,
             padding=1
         )
-        self.bn2 = nn.BatchNorm2d(num_features=in_channels)
+        self.bn2 = nn.BatchNorm2d(num_features=mid_channels)
 
         self.conv3 = nn.Conv2d(
-            in_channels=in_channels,
+            in_channels=mid_channels,
             out_channels=out_channels,
             kernel_size=1,
             stride=1
@@ -114,12 +119,7 @@ class BottleneckBlock(nn.Module):
     def forward(self, input_data):
         identity = input_data
         out = self.conv1(input_data)
-        out = self.bn
-
-
-
-
-        nv1(out)
+        out = self.bn1(out)
         out = self.relu(out)
 
         out = self.conv2(out)
@@ -130,7 +130,7 @@ class BottleneckBlock(nn.Module):
         out = self.bn3(out)
 
         if self.conv_1x1:
-            out = self.conv_1x1(out)
+            identity = self.conv_1x1(identity)
 
         out += identity
         out = self.relu(out)
@@ -139,42 +139,64 @@ class BottleneckBlock(nn.Module):
 
 class ResNet(Backbone):
 
-    def __init__(self, cfg, input_shape):
+    def __init__(self,
+                 block: Type[Union[BasicStemBlock, BottleneckBlock]],
+                 block_nums: List[int],
+                 input_shape: ShapeSpec = None):
         super().__init__()
 
-        in_channels = 3
-        # input_shape: in_channels*3*224*224
-        self.block: Union[BasicStemBlock, BottleneckBlock] = BottleneckBlock
-        self.layer_1 = nn.Conv2d(in_channels=in_channels, out_channels=64, kernel_size=7, stride=2,
-                                padding=3)  # b 64 112 112
+        self.block = block
+        assert len(block_nums) == 4, f"block_nums: {block_nums}  的长度必须为4！"
+        self.block_nums = block_nums
+        self.in_channels = input_shape.channels
+
+        self._make_layers()
+
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+            elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
+
+    def _make_layers(self):
+        self.layer_1 = nn.Conv2d(in_channels=self.in_channels, out_channels=64, kernel_size=7, stride=2,
+                                 padding=3)  # b 64 112 112
+
+        self.in_channels = 64
 
         self.layer_2 = nn.Sequential(
-            nn.MaxPool2d(kernel_size=3, stride=2, padding=1),  # b 64 56 56
-            self._make_stage(in_channels=64, out_channels=64, nums_duplicate=3, layer_num=2)
+            nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
+            self._make_stage(mid_channels=64, nums_duplicate=3, layer_num=2)
         )
 
         self.layer_3 = nn.Sequential(
-            self._make_stage(in_channels=64, out_channels=64, nums_duplicate=4, layer_num=3)
+            self._make_stage(mid_channels=128, nums_duplicate=4, layer_num=3)
         )
 
         self.layer_4 = nn.Sequential(
-            self._make_stage(in_channels=64, out_channels=64, nums_duplicate=6, layer_num=4)
+            self._make_stage(mid_channels=256, nums_duplicate=6, layer_num=4)
         )
 
         self.layer_5 = nn.Sequential(
-            self._make_stage(in_channels=64, out_channels=64, nums_duplicate=3, layer_num=5)
+            self._make_stage(mid_channels=512, nums_duplicate=3, layer_num=5)
         )
 
-
-    def _make_stage(self, in_channels, out_channels, nums_duplicate: int, layer_num: int):
+    def _make_stage(self, mid_channels, nums_duplicate: int, layer_num: int):
 
         stage = nn.Sequential()
+
+        out_channels = mid_channels * self.block.expansion
 
         for block_i in range(nums_duplicate):
             layer_2 = (layer_num == 2)
             use_1x1 = (block_i == 0)  # 每一层的第一个block要进行对齐
             downsample = (block_i == 0 and not layer_2)  # 除了第二层的第一个block外，其余层的第一个block需要进行降采样
-            stage.add_module(f'layer_{layer_num}_block_{block_i}', self.block(in_channels, out_channels, use_1x1, downsample))
+
+            stage.add_module(f'layer_{layer_num}_block_{block_i}',
+                             self.block(self.in_channels, out_channels, use_1x1, downsample))
+
+            self.in_channels = out_channels  # 下一个block的input_channels应该为上一个block的out_channels
 
         return stage
 
@@ -185,12 +207,9 @@ class ResNet(Backbone):
         out = self.layer_2(out)
         assert out.shape == (1, 256, 56, 56)
         out = self.layer_3(out)
-        # assert input_data.shape == (1, 256, 56, 56)
+        assert out.shape == (1, 512, 28, 28)
         out = self.layer_4(out)
-
+        assert out.shape == (1, 1024, 14, 14)
         out = self.layer_5(out)
-
+        assert out.shape == (1, 2048, 7, 7)
         return out
-
-
-
