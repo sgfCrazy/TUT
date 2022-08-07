@@ -22,6 +22,10 @@ class Annotation(metaclass=ABCMeta):
     def read(self):
         pass
 
+    @abstractmethod
+    def to_generic_anno(self):
+        pass
+
 
 class ObjectDetectionAnnotation(Annotation):
     """
@@ -36,7 +40,6 @@ class ObjectDetectionAnnotation(Annotation):
         self.channels = None
         self.objects = []  # 五个点的格式 [p1, p2, p3, p4, p1]
 
-
     def write(self):
         """
 
@@ -46,12 +49,15 @@ class ObjectDetectionAnnotation(Annotation):
 
     def read(self):
         """
-
         """
         # TODO
         pass
 
-    def to_generic_template(self):
+    def to_generic_anno(self):
+        """
+        TODO
+        """
+
         pass
 
 
@@ -62,6 +68,9 @@ class VOCObjectDetectionAnnotation(ObjectDetectionAnnotation):
 
         self.anno_abspath = anno_abspath
         self.anno_transform = anno_transform
+
+        # self.read()
+
 
     def _get_nodes(self, parent_node, tag_name):
         """
@@ -77,19 +86,19 @@ class VOCObjectDetectionAnnotation(ObjectDetectionAnnotation):
         """
         如果tag_name对应的节点只有一个时，调用此方法
         """
-        node = self._get_nodes(parent_node, tag_name)
-        return node if node is None else node[0]
+        nodes = self._get_nodes(parent_node, tag_name)
+        return nodes[0] if nodes else nodes
 
     def _get_single_node_value(self, parent_node, tag_name):
         node = self._get_single_node(parent_node, tag_name)
         if node is None:
             return ""
         else:
-            return node.data
+            return node.childNodes[0].data
 
     def read(self):
         # 1. 工厂方法， 返回一个dom对象
-        dom = minidom.parse(self.anno_abspath)
+        dom = minidom.parse(str(self.anno_abspath))
         # 2. 获取根节点
         root_node = dom.documentElement
         # 3. 读取各个节点
@@ -112,7 +121,7 @@ class VOCObjectDetectionAnnotation(ObjectDetectionAnnotation):
 
         self.segmented = self._get_single_node_value(root_node, 'segmented')
 
-        objects_node = self._get_nodes(root_node, 'source')
+        objects_node = self._get_nodes(root_node, 'object')
         self.objects = []
 
         #  ---------------------- find objects start -----------------
@@ -140,13 +149,16 @@ class VOCObjectDetectionAnnotation(ObjectDetectionAnnotation):
             object['truncated'] = truncated
             object['difficult'] = difficult
             object['bndbox'] = bndbox
+            self.objects.append(object)
         #  ---------------------- find objects end -----------------
+
+        return self
 
     def write(self):
         # TODO
         pass
 
-    def to_generic_template(self) -> ObjectDetectionAnnotation:
+    def to_generic_anno(self) -> ObjectDetectionAnnotation:
         """
         子类自己去实现通用模板的转化
         """

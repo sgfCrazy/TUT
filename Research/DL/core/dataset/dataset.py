@@ -1,12 +1,13 @@
 from torch.utils.data import Dataset
-from sample import ObjectDetectionSample, Sample
+from .sample import ObjectDetectionSample, Sample
 from typing import List
-from image import VOCImage
-from annotation import VOCObjectDetectionAnnotation
+from .image import VOCImage
+from .annotation import VOCObjectDetectionAnnotation
 
 from pathlib import Path
 import logging
 from abc import ABCMeta, abstractmethod
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -16,8 +17,11 @@ class ObjectDetectionDataset(Dataset, metaclass=ABCMeta):
     def __init__(self, dataset_dirname):
         self.dataset_dirname = dataset_dirname
 
-        self.samples = None
-        pass
+        self.samples: List[ObjectDetectionSample] = None
+
+        self.train_samples: List[ObjectDetectionSample] = None
+        self.eval_samples: List[ObjectDetectionSample] = None
+        self.test_samples: List[ObjectDetectionSample] = None
 
     def __len__(self):
         return len(self.samples)
@@ -33,14 +37,23 @@ class ObjectDetectionDataset(Dataset, metaclass=ABCMeta):
     def write(self, *args, **kwargs):
         pass
 
-    @abstractmethod
-    def to_generic_template(self):
-        pass
+    # @abstractmethod
+    # def to_generic_dataset(self):
+    #     pass
 
 
 class COCOObjectDetectionDataset(ObjectDetectionDataset):
     def __init__(self, dataset_dirname):
         super(COCOObjectDetectionDataset, self).__init__(dataset_dirname)
+
+    def _write(self, new_dataset_dirname):
+
+
+
+        pass
+
+    def write(self, *args, **kwargs):
+        self._write(args[0])
 
 
 class YOLOObjectDetectionDataset(ObjectDetectionDataset):
@@ -68,13 +81,13 @@ class VOCObjectDetectionDataset(ObjectDetectionDataset):
         test_txt_abspath = Path(self.split_txt_dirname, 'test.txt')
         self.trainval_txt_abspath = Path(self.split_txt_dirname, 'val.txt')
 
-        self.train_samples = self.read(train_txt_abspath)
-        self.eval_samples = self.read(val_txt_abspath)
-        self.test_samples = self.read(test_txt_abspath)
+        self.train_samples: List[ObjectDetectionSample] = self.read(train_txt_abspath)
+        self.eval_samples: List[ObjectDetectionSample] = self.read(val_txt_abspath)
+        self.test_samples: List[ObjectDetectionSample] = self.read(test_txt_abspath)
 
         # 默认为 train 模式
         self.mode = "train"
-        self.samples = self.train_samples
+        self.samples: List[ObjectDetectionSample] = self.train_samples
 
     def __len__(self):
         return len(self.samples)
@@ -91,15 +104,15 @@ class VOCObjectDetectionDataset(ObjectDetectionDataset):
         with open(txt_abspath, 'r') as f:
             lines = f.readlines()
 
-        for line_num, line in enumerate(1, lines):
+        for line_num, line in enumerate(lines, 1):
             sample_id = line.strip()
-            if sample_id:
+            if not sample_id:
                 logger.warning(f"{txt_abspath} : {line_num}行 为空白字符！")
                 continue
 
             sample_id = Path(sample_id).stem
-            image_abspath = Path(self.images_dirname, sample_id, '.jpg')
-            anno_abspath = Path(self.annos_dirname, sample_id, '.xml')
+            image_abspath = Path(self.images_dirname, sample_id + '.jpg')
+            anno_abspath = Path(self.annos_dirname, sample_id + '.xml')
 
             if not (Path(image_abspath).exists() and Path(anno_abspath).exists()):
                 logger.error(f"{txt_abspath} : {line_num}行 {sample_id} 指向的图片或标签文件不存在！")
@@ -111,10 +124,10 @@ class VOCObjectDetectionDataset(ObjectDetectionDataset):
 
     def _read_image(self, image_abspath) -> VOCImage:
 
-        return VOCImage(image_abspath, self.image_transform)
+        return VOCImage(image_abspath, self.image_transform).read()
 
     def _read_anno(self, anno_abspath) -> VOCObjectDetectionAnnotation:
-        return VOCObjectDetectionAnnotation(anno_abspath, self.anno_transform)
+        return VOCObjectDetectionAnnotation(anno_abspath, self.anno_transform).read()
 
     def read(self, *args, **kwargs):
         return self._read(args[0])
@@ -159,32 +172,54 @@ class VOCObjectDetectionDataset(ObjectDetectionDataset):
         self.mode = "test"
         self.samples = self.test_samples
 
-    def to_generic_template(self):
-        """
-        将self.sampes 转换成标准sample  即只有name 和 标注框
-        """
-
-        VOCObjectDetectionDataset()
-        pass
+    # def to_generic_dataset(self):
+    #     """
+    #     将self.sampes 转换成标准sample  即只有name 和 标注框
+    #     """
+    #
+    #     generic_dataset = ObjectDetectionDataset()
+    #
+    #     new_train_samples = self.train_samples
+    #     pass
 
 
 class ObjectDetectionDatasetTransfer:
 
     def __init__(self, dataset: ObjectDetectionDataset):
+        self.dataset = dataset
 
-        self.dataset = dataset.to_generic_template()
+        self.dataset_dirname = self.dataset.dataset_dirname
+        self.train_samples, self.eval_samples, self.test_samples = self.to_generic_dataset()
 
-        pass
+    def _to_generic_samples(self, samples):
+        train_samples = []
+        for sample in samples:
+            oba = sample.anno.to_generic_anno()
+            obi = sample.image.to_generic_image()
 
-    def to_generic_template
+            new_sample = ObjectDetectionSample(self.dataset.samples, obi, oba)
+            train_samples.append(new_sample)
+        return train_samples
 
-    def to_cooc(self):
+    def to_generic_dataset(self):
+        train_samples = self._to_generic_samples(self.dataset.train_samples)
+        eval_samples = self._to_generic_samples(self.dataset.eval_samples)
+        test_samples = self._to_generic_samples(self.dataset.test_samples)
+
+        return train_samples, eval_samples, test_samples
+
+
+    def to_coco(self, dataset_dirname):
+        for sample in self.train_samples:
+            sample.anno
+
         pass
 
     def to_voc(self, ):
         pass
 
-    def to_yolo(self,):
+    def to_yolo(self, ):
+
+
+
         pass
-
-
