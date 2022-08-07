@@ -1,8 +1,8 @@
 import cv2
 import numpy as np
+from abc import ABCMeta, abstractmethod
 
-
-class Image:
+class Image(metaclass=ABCMeta):
     """
     一个样本对应的图片数据
     """
@@ -10,7 +10,12 @@ class Image:
     def __init__(self):
         pass
 
+    @abstractmethod
     def read(self):
+        pass
+
+    @abstractmethod
+    def write(self):
         pass
 
 
@@ -28,5 +33,8 @@ class VOCImage(Image):
         image = cv2.imdecode(np.fromfile(self.image_abspath, dtype=np.uint8), cv2.IMREAD_COLOR)
         if self.image_transform:
             self.image_transform(image)
-
         return image
+
+    def write(self):
+        # TODO
+        pass

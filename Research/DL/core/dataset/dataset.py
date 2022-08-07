@@ -1,58 +1,64 @@
 from torch.utils.data import Dataset
-from sample import ObjectDetectionSample
+from sample import ObjectDetectionSample, Sample
 from typing import List
 from image import VOCImage
 from annotation import VOCObjectDetectionAnnotation
 
 from pathlib import Path
 import logging
+from abc import ABCMeta, abstractmethod
 
 logger = logging.getLogger(__name__)
 
 
-# class ObjectDetectionDataset(Dataset, metaclass=ABCMeta):
-#
-#     def __init__(self, root_fullpath):
-#         pass
-#         # self.root_fullpath = root_fullpath
-#         # self.samples = self.read()
-#
-#
-#     def __len__(self):
-#         return len(self.samples)
-#
-#     def __getitem__(self, idx):
-#         return self.samples[idx]
-#
-#     @abstractmethod
-#     def read(self) -> List[Sample]:
-#         pass
-#
-#     def add(self, sample: Sample):
-#         self.samples.append(sample)
+class ObjectDetectionDataset(Dataset, metaclass=ABCMeta):
+
+    def __init__(self, dataset_dirname):
+        self.dataset_dirname = dataset_dirname
+
+        self.samples = None
+        pass
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        return self.samples[idx]
+
+    @abstractmethod
+    def read(self, *args, **kwargs) -> List[Sample]:
+        pass
+
+    @abstractmethod
+    def write(self, *args, **kwargs):
+        pass
+
+    @abstractmethod
+    def to_generic_template(self):
+        pass
 
 
-class COCOObjectDetectionDataset(Dataset):
-    def __init__(self):
-        super(COCOObjectDetectionDataset, self).__init__()
+class COCOObjectDetectionDataset(ObjectDetectionDataset):
+    def __init__(self, dataset_dirname):
+        super(COCOObjectDetectionDataset, self).__init__(dataset_dirname)
 
 
-class YOLOObjectDetectionDataset(Dataset):
-    def __init__(self):
-        super(YOLOObjectDetectionDataset, self).__init__()
+class YOLOObjectDetectionDataset(ObjectDetectionDataset):
+    def __init__(self, dataset_dirname):
+        super(YOLOObjectDetectionDataset, self).__init__(dataset_dirname)
 
 
-class VOCObjectDetectionDataset(Dataset):
+class VOCObjectDetectionDataset(ObjectDetectionDataset):
 
     def __init__(self, dataset_dirname, image_transform=None, anno_transform=None):
-        super(VOCObjectDetectionDataset, self).__init__()
+        super(VOCObjectDetectionDataset, self).__init__(dataset_dirname)
 
         # 图像的转换
         self.image_transform = image_transform
         # 标签的转换
         self.anno_transform = anno_transform
 
-        self.dataset_dirname = dataset_dirname  # voc数据集的根目录的路径
+        # self.dataset_dirname = dataset_dirname  # voc数据集的根目录的路径
         self.images_dirname = Path(self.dataset_dirname, 'JPEGImages')
         self.annos_dirname = Path(self.dataset_dirname, 'Annotations')
         self.split_txt_dirname = Path(self.dataset_dirname, 'ImageSets', 'Main')
@@ -108,12 +114,17 @@ class VOCObjectDetectionDataset(Dataset):
         return VOCImage(image_abspath, self.image_transform)
 
     def _read_anno(self, anno_abspath) -> VOCObjectDetectionAnnotation:
-
         return VOCObjectDetectionAnnotation(anno_abspath, self.anno_transform)
 
-    def read(self, txt_abspath) -> List[ObjectDetectionSample]:
-        samples_path = self._get_samples_path(txt_abspath)
+    def read(self, *args, **kwargs):
+        return self._read(args[0])
 
+    def _read(self, txt_abspath) -> List[ObjectDetectionSample]:
+        """
+        读取数据集
+        """
+
+        samples_path = self._get_samples_path(txt_abspath)
         samples = []
 
         for sample_id, image_abspath, anno_abspath in samples_path:
@@ -125,11 +136,15 @@ class VOCObjectDetectionDataset(Dataset):
 
         return samples
 
-    def write(self, new_dataset_dirname):
+    def write(self, *args, **kwargs):
         """
         将数据集写到新的目录下
         """
+        dataset, type, new_dataset_dirname = kwargs['dataset'], kwargs['type'], kwargs['new_dataset_dirname']
+        self._write(dataset, new_dataset_dirname)
 
+    def _write(self, new_dataset_dirname):
+        # TODO
         pass
 
     def train(self):
@@ -144,9 +159,32 @@ class VOCObjectDetectionDataset(Dataset):
         self.mode = "test"
         self.samples = self.test_samples
 
+    def to_generic_template(self):
+        """
+        将self.sampes 转换成标准sample  即只有name 和 标注框
+        """
 
-class DatasetTransfer:
-    def __init__(self):
+        VOCObjectDetectionDataset()
         pass
 
-    pass
+
+class ObjectDetectionDatasetTransfer:
+
+    def __init__(self, dataset: ObjectDetectionDataset):
+
+        self.dataset = dataset.to_generic_template()
+
+        pass
+
+    def to_generic_template
+
+    def to_cooc(self):
+        pass
+
+    def to_voc(self, ):
+        pass
+
+    def to_yolo(self,):
+        pass
+
+

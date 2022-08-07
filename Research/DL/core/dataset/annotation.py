@@ -1,20 +1,26 @@
 from xml.dom import minidom
 import logging
+from abc import ABCMeta, abstractmethod
 
 
-class Annotation:
+class Annotation(metaclass=ABCMeta):
     def __init__(self):
+        self.generic_anno = None
 
-        self.id = None
+    # @abstractmethod
+    # def to_generic_template(self):
+    #     """
+    #     子类自己去实现通用模板的转化
+    #     """
+    #     pass
 
-        self.coor = None
-
-    def to_generic_template(self):
-        """
-        子类自己去实现通用模板的转化
-        """
+    @abstractmethod
+    def write(self):
         pass
-    pass
+
+    @abstractmethod
+    def read(self):
+        pass
 
 
 class ObjectDetectionAnnotation(Annotation):
@@ -24,9 +30,29 @@ class ObjectDetectionAnnotation(Annotation):
 
     def __init__(self):
         super(ObjectDetectionAnnotation, self).__init__()
+        self.anno_abspath = None
+        self.height = None
+        self.width = None
+        self.channels = None
+        self.objects = []  # 五个点的格式 [p1, p2, p3, p4, p1]
 
-        # self.sample_id = sample_id  # image_id == anno_id
-        # self.coors = coordinate  # 通用的顺时针或逆时针坐标点的格式
+
+    def write(self):
+        """
+
+        """
+        # TODO
+        pass
+
+    def read(self):
+        """
+
+        """
+        # TODO
+        pass
+
+    def to_generic_template(self):
+        pass
 
 
 class VOCObjectDetectionAnnotation(ObjectDetectionAnnotation):
@@ -61,7 +87,6 @@ class VOCObjectDetectionAnnotation(ObjectDetectionAnnotation):
         else:
             return node.data
 
-
     def read(self):
         # 1. 工厂方法， 返回一个dom对象
         dom = minidom.parse(self.anno_abspath)
@@ -83,29 +108,70 @@ class VOCObjectDetectionAnnotation(ObjectDetectionAnnotation):
         if source_node is not None:
             self.size['width'] = self._get_single_node_value(size_node, 'width')
             self.size['height'] = self._get_single_node_value(size_node, 'height')
-            self.size['image'] = self._get_single_node_value(size_node, 'image')
+            self.size['depth'] = self._get_single_node_value(size_node, 'depth')
 
         self.segmented = self._get_single_node_value(root_node, 'segmented')
 
+        objects_node = self._get_nodes(root_node, 'source')
+        self.objects = []
 
-        object_nodes = self._get_nodes(root_node, 'source')
-        for
+        #  ---------------------- find objects start -----------------
+        for object_node in objects_node:
+            object = {}
+            name = self._get_single_node_value(object_node, 'name')
+            pose = self._get_single_node_value(object_node, 'pose')
+            truncated = self._get_single_node_value(object_node, 'truncated')
+            difficult = self._get_single_node_value(object_node, 'difficult')
 
+            bndbox = {}
+            bndbox_node = self._get_single_node(object_node, 'bndbox')
+            xmin = self._get_single_node_value(bndbox_node, 'xmin')
+            ymin = self._get_single_node_value(bndbox_node, 'ymin')
+            xmax = self._get_single_node_value(bndbox_node, 'xmax')
+            ymax = self._get_single_node_value(bndbox_node, 'ymax')
 
+            bndbox['xmin'] = xmin
+            bndbox['ymin'] = ymin
+            bndbox['xmax'] = xmax
+            bndbox['ymax'] = ymax
 
+            object['name'] = name
+            object['pose'] = pose
+            object['truncated'] = truncated
+            object['difficult'] = difficult
+            object['bndbox'] = bndbox
+        #  ---------------------- find objects end -----------------
 
+    def write(self):
+        # TODO
+        pass
 
+    def to_generic_template(self) -> ObjectDetectionAnnotation:
+        """
+        子类自己去实现通用模板的转化
+        """
+        oba = ObjectDetectionAnnotation()
+        oba.anno_abspath = self.anno_abspath
+        oba.height = self.size['height']
+        oba.width = self.size['width']
+        oba.channels = self.size['depth']
+        for object in self.objects:
+            name = object['name']
+            xmin = object['bndbox']['xmin']
+            ymin = object['bndbox']['ymin']
+            xmax = object['bndbox']['xmax']
+            ymax = object['bndbox']['ymax']
 
-# class Annotations:
-#     """
-#         每张图片的anno
-#     """
-#
-#     def __init__(self):
-#         self.annos = {}  # key: id, value: anno 某个图片对应的所有标注
-#         pass
-#
-#     def add(self, anno: Annotation):
-#
-#         self.annos[anno.id] = anno.coor
-#         pass
+            oba_obj = {
+                'name': name,
+                'box': [
+                    [xmin, ymin],
+                    [xmax, ymin],
+                    [xmax, ymax],
+                    [xmin, ymax],
+                    [xmin, ymin]
+                ]
+            }
+            oba.objects.append(oba_obj)
+
+        return oba
