@@ -1,0 +1,22 @@
+{
+  "lr0": {"_type": "loguniform", "_value": [0.00001, 0.1]},
+  "lrf": {"_type": "loguniform", "_value": [0.01, 1.0]},
+  "momentum": {"_type": "loguniform", "_value": [0.6, 0.98]},
+  "weight_decay": {"_type": "loguniform", "_value": [0.0, 0.001]},
+  "warmup_epochs": {"_type": "uniform", "_value": [0.0, 5.0]},
+  "warmup_momentum": {"_type": "loguniform", "_value": [0.0, 0.95]},
+  "warmup_bias_lr": {"_type": "loguniform", "_value": [0.0, 0.2]},
+  "box": {"_type": "loguniform", "_value": [0.02, 0.2]},
+  "cls": {"_type": "loguniform", "_value": [0.2, 4.0]},
+  "cls_pw": {"_type": "loguniform", "_value": [0.5, 2.0]},
+  "obj": {"_type": "loguniform", "_value": [0.2, 4.0]},
+  "obj_pw": {"_type": "loguniform", "_value": [0.5, 2.0]},
+  "iou_t": {"_type": "loguniform", "_value": [0.1, 0.7]},
+  "anchor_t": {"_type": "uniform", "_value": [2.0, 8.0]},
+  "anchors": {"_type": "uniform", "_value": [2.0, 10.0]},
+  "fl_gamma": {"_type": "loguniform", "_value": [0.0, 2.0]},
+  "hsv_h": {"_type": "loguniform", "_value": [0.0, 0.1]},
+  "hsv_s": {"_type": "loguniform", "_value": [0.0, 0.9]},
+  "hsv_v": {"_type": "loguniform", "_value": [0.0, 0.9]},
+  "degrees": {"_type": "uniform", "_value": [0.0, 45.0]}
+}
