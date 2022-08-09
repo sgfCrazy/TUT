@@ -1,10 +1,8 @@
 import cv2
 import numpy as np
-from abc import ABCMeta, abstractmethod
-import copy
 
 
-class Image(metaclass=ABCMeta):
+class Image:
     """
     一个样本对应的图片数据
     """
@@ -12,32 +10,19 @@ class Image(metaclass=ABCMeta):
     def __init__(self):
         pass
 
-    @abstractmethod
     def read(self):
-        pass
+        raise NotImplementedError
 
-    @abstractmethod
     def write(self):
-        pass
+        raise NotImplementedError
 
-    @abstractmethod
-    def to_generic_image(self):
-        pass
 
 class ObjectDetectionImage(Image):
-    def __init__(self):
+    def __init__(self, image_abspath, image_transform=None):
         super(ObjectDetectionImage, self).__init__()
-
-
-
-class VOCImage(Image):
-
-    def __init__(self, image_abspath, image_transform):
-        super(VOCImage, self).__init__()
 
         self.image_abspath = image_abspath
         self.image_transform = image_transform
-        # self.data = self.read()
 
     def read(self):
         # 能够读取中文路径，c,h,w BGR
@@ -51,8 +36,33 @@ class VOCImage(Image):
         return self
 
     def write(self):
-        # TODO
         pass
 
+
+class VOCImage(ObjectDetectionImage):
+
+    def __init__(self, image_abspath, image_transform=None):
+        super(VOCImage, self).__init__(image_abspath, image_transform)
+
     def to_generic_image(self):
-        return copy.deepcopy(self)
+        odi = ObjectDetectionImage(self.image_abspath, self.image_transform)
+        odi.data = self.data
+        odi.width = self.width
+        odi.height = self.height
+        odi.channels = self.channels
+        return odi
+
+
+class YOLOImage(ObjectDetectionImage):
+
+    def __init__(self, image_abspath, image_transform=None):
+        super(YOLOImage, self).__init__(image_abspath, image_transform)
+
+    def to_generic_image(self):
+        odi = ObjectDetectionImage(self.image_abspath, self.image_transform)
+        # 是否使用data的引用 TODO
+        odi.data = self.data
+        odi.width = self.width
+        odi.height = self.height
+        odi.channels = self.channels
+        return odi

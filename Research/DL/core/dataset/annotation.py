@@ -3,28 +3,18 @@ import logging
 from abc import ABCMeta, abstractmethod
 
 
-class Annotation(metaclass=ABCMeta):
+class Annotation:
     def __init__(self):
-        self.generic_anno = None
+        pass
 
-    # @abstractmethod
-    # def to_generic_template(self):
-    #     """
-    #     子类自己去实现通用模板的转化
-    #     """
-    #     pass
-
-    @abstractmethod
     def write(self):
-        pass
+        raise NotImplementedError
 
-    @abstractmethod
     def read(self):
-        pass
+        raise NotImplementedError
 
-    @abstractmethod
-    def to_generic_anno(self):
-        pass
+    # def to_generic_anno(self):
+    #     raise NotImplementedError
 
 
 class ObjectDetectionAnnotation(Annotation):
@@ -32,9 +22,11 @@ class ObjectDetectionAnnotation(Annotation):
     一个目标检测样本对应的标签数据，包扩该样本的id和标签坐标
     """
 
-    def __init__(self):
+    def __init__(self, anno_abspath, anno_transform):
         super(ObjectDetectionAnnotation, self).__init__()
-        self.anno_abspath = None
+        self.anno_abspath = anno_abspath
+        self.anno_transform = anno_transform
+
         self.height = None
         self.width = None
         self.channels = None
@@ -53,24 +45,11 @@ class ObjectDetectionAnnotation(Annotation):
         # TODO
         pass
 
-    def to_generic_anno(self):
-        """
-        TODO
-        """
-
-        pass
-
 
 class VOCObjectDetectionAnnotation(ObjectDetectionAnnotation):
 
     def __init__(self, anno_abspath, anno_transform):
-        super(VOCObjectDetectionAnnotation, self).__init__()
-
-        self.anno_abspath = anno_abspath
-        self.anno_transform = anno_transform
-
-        # self.read()
-
+        super(VOCObjectDetectionAnnotation, self).__init__(anno_abspath, anno_transform)
 
     def _get_nodes(self, parent_node, tag_name):
         """
@@ -167,6 +146,60 @@ class VOCObjectDetectionAnnotation(ObjectDetectionAnnotation):
         oba.height = self.size['height']
         oba.width = self.size['width']
         oba.channels = self.size['depth']
+        for object in self.objects:
+            name = object['name']
+            xmin = object['bndbox']['xmin']
+            ymin = object['bndbox']['ymin']
+            xmax = object['bndbox']['xmax']
+            ymax = object['bndbox']['ymax']
+
+            oba_obj = {
+                'name': name,
+                'box': [
+                    [xmin, ymin],
+                    [xmax, ymin],
+                    [xmax, ymax],
+                    [xmin, ymax],
+                    [xmin, ymin]
+                ]
+            }
+            oba.objects.append(oba_obj)
+
+        return oba
+
+
+class YOLOObjectDetectionAnnotation(ObjectDetectionAnnotation):
+
+    def __init__(self, anno_abspath, anno_transform, image):
+        super(YOLOObjectDetectionAnnotation, self).__init__(anno_abspath, anno_transform)
+
+        self.image = image
+
+    def read(self):
+        # TODO
+        with open(self.anno_abspath, 'r') as f:
+            lines = f.readlines()
+
+        for line in lines:
+            line = line.strip()
+
+
+        return self
+
+    def write(self):
+        # TODO
+        pass
+
+    def to_generic_anno(self) -> ObjectDetectionAnnotation:
+        """
+        子类自己去实现通用模板的转化
+        """
+        oba = ObjectDetectionAnnotation()
+        oba.anno_abspath = self.anno_abspath
+        oba.height = self.image.height
+        oba.width = self.image.width
+        oba.channels = self.image.channels
+
         for object in self.objects:
             name = object['name']
             xmin = object['bndbox']['xmin']
