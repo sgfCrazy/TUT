@@ -10,7 +10,7 @@ class Annotation:
     def write(self):
         raise NotImplementedError
 
-    def read(self):
+    def read(self, anno_abspath, anno_transform=None):
         raise NotImplementedError
 
     # def to_generic_anno(self):
@@ -22,15 +22,31 @@ class ObjectDetectionAnnotation(Annotation):
     一个目标检测样本对应的标签数据，包扩该样本的id和标签坐标
     """
 
-    def __init__(self, anno_abspath, anno_transform):
+    def __init__(self):
         super(ObjectDetectionAnnotation, self).__init__()
-        self.anno_abspath = anno_abspath
-        self.anno_transform = anno_transform
+        self.anno_abspath = None
+        self.anno_transform = None
 
         self.height = None
         self.width = None
         self.channels = None
-        self.objects = []  # 五个点的格式 [p1, p2, p3, p4, p1]
+
+        """
+            oba_obj = {
+                'clas_id': clas_id,
+                'clas': clas,
+                'box': [  # 五个点的格式 [p1, p2, p3, p4, p1]
+                    [xmin, ymin],
+                    [xmax, ymin],
+                    [xmax, ymax],
+                    [xmin, ymax],
+                    [xmin, ymin]
+                ]
+            }
+        """
+        self.objects = []
+
+
 
     def write(self):
         """
@@ -39,7 +55,7 @@ class ObjectDetectionAnnotation(Annotation):
         # TODO
         pass
 
-    def read(self):
+    def read(self, anno_abspath, anno_transform):
         """
         """
         # TODO
@@ -48,8 +64,8 @@ class ObjectDetectionAnnotation(Annotation):
 
 class VOCObjectDetectionAnnotation(ObjectDetectionAnnotation):
 
-    def __init__(self, anno_abspath, anno_transform):
-        super(VOCObjectDetectionAnnotation, self).__init__(anno_abspath, anno_transform)
+    def __init__(self):
+        super(VOCObjectDetectionAnnotation, self).__init__()
 
     def _get_nodes(self, parent_node, tag_name):
         """
@@ -75,7 +91,9 @@ class VOCObjectDetectionAnnotation(ObjectDetectionAnnotation):
         else:
             return node.childNodes[0].data
 
-    def read(self):
+    def read(self, anno_abspath, anno_transform=None):
+        self.anno_abspath = anno_abspath
+        self.anno_transform = anno_transform
         # 1. 工厂方法， 返回一个dom对象
         dom = minidom.parse(str(self.anno_abspath))
         # 2. 获取根节点
@@ -94,9 +112,9 @@ class VOCObjectDetectionAnnotation(ObjectDetectionAnnotation):
         size_node = self._get_single_node(root_node, 'size')
         self.size = {}
         if source_node is not None:
-            self.size['width'] = self._get_single_node_value(size_node, 'width')
-            self.size['height'] = self._get_single_node_value(size_node, 'height')
-            self.size['depth'] = self._get_single_node_value(size_node, 'depth')
+            self.size['width'] = int(self._get_single_node_value(size_node, 'width'))
+            self.size['height'] = int(self._get_single_node_value(size_node, 'height'))
+            self.size['depth'] = int(self._get_single_node_value(size_node, 'depth'))
 
         self.segmented = self._get_single_node_value(root_node, 'segmented')
 
@@ -118,23 +136,50 @@ class VOCObjectDetectionAnnotation(ObjectDetectionAnnotation):
             xmax = self._get_single_node_value(bndbox_node, 'xmax')
             ymax = self._get_single_node_value(bndbox_node, 'ymax')
 
-            bndbox['xmin'] = xmin
-            bndbox['ymin'] = ymin
-            bndbox['xmax'] = xmax
-            bndbox['ymax'] = ymax
+            bndbox['xmin'] = float(xmin)
+            bndbox['ymin'] = float(ymin)
+            bndbox['xmax'] = float(xmax)
+            bndbox['ymax'] = float(ymax)
 
             object['name'] = name
             object['pose'] = pose
-            object['truncated'] = truncated
-            object['difficult'] = difficult
+            object['truncated'] = int(truncated)
+            object['difficult'] = int(difficult)
             object['bndbox'] = bndbox
             self.objects.append(object)
         #  ---------------------- find objects end -----------------
 
         return self
 
-    def write(self):
-        # TODO
+    def write(self, anno_abspath):
+        # 1.创建DOM树对象
+        dom = minidom.Document()
+        # 2.创建根节点。每次都要用DOM对象来创建任何节点。
+        root_node = dom.createElement('annotation')
+
+        # 创建 folder 节点
+        folder_node = dom.createElement('folder')
+        folder_txt = dom.createTextNode(self.folder)
+        folder_node.appendChild(folder_txt)
+
+        # 创建 folder 节点
+        filename_node = dom.createElement('filename')
+        filename_txt = dom.createTextNode(self.filename)
+        filename_node.appendChild(filename_txt)
+
+        # 创建 source 节点
+        source_node = dom.createElement('source')
+
+        # 创建 database 节点
+
+        filename_txt = dom.createTextNode(self.filename)
+        filename_node.appendChild(filename_txt)
+
+
+
+        # 3.用DOM对象添加根节点
+        dom.appendChild(root_node)
+
         pass
 
     def to_generic_anno(self) -> ObjectDetectionAnnotation:
@@ -170,20 +215,40 @@ class VOCObjectDetectionAnnotation(ObjectDetectionAnnotation):
 
 class YOLOObjectDetectionAnnotation(ObjectDetectionAnnotation):
 
-    def __init__(self, anno_abspath, anno_transform, image):
-        super(YOLOObjectDetectionAnnotation, self).__init__(anno_abspath, anno_transform)
+    def __init__(self):
+        super(YOLOObjectDetectionAnnotation, self).__init__()
 
-        self.image = image
 
-    def read(self):
-        # TODO
+
+    def read(self, image, classes_name, anno_abspath, anno_transform=None):
+
+        # self.image = image
+        self.height = image.height
+        self.width = image.width
+        self.channels = image.channels
+
+        self.anno_abspath = anno_abspath
+        self.anno_transform = anno_transform
+
         with open(self.anno_abspath, 'r') as f:
             lines = f.readlines()
 
+        object = {}
+        # read txt start---------------------------------------------------------
         for line in lines:
             line = line.strip()
+            # 标注框的中心点坐标和宽高
+            clas_id, x_center, y_center, w, h = line.split()
 
+            object["clas_id"] = int(clas_id)
+            object["clas"] = classes_name[object["clas_id"]]
 
+            object["x_center"] = float(x_center)
+            object["y_center"] = float(y_center)
+            object["w"] = float(w)
+            object["h"] = float(h)
+            self.objects.append(object)
+        # read txt end---------------------------------------------------------
         return self
 
     def write(self):
@@ -196,19 +261,25 @@ class YOLOObjectDetectionAnnotation(ObjectDetectionAnnotation):
         """
         oba = ObjectDetectionAnnotation()
         oba.anno_abspath = self.anno_abspath
-        oba.height = self.image.height
-        oba.width = self.image.width
-        oba.channels = self.image.channels
+        oba.height = self.height
+        oba.width = self.width
+        oba.channels = self.channels
 
         for object in self.objects:
-            name = object['name']
-            xmin = object['bndbox']['xmin']
-            ymin = object['bndbox']['ymin']
-            xmax = object['bndbox']['xmax']
-            ymax = object['bndbox']['ymax']
+            clas_id = object['clas_id']
+            clas = object['clas']
+            x_center, y_center, w, h = object['x_center'], object['y_center'], object['w'], object['h']
+
+            x_center, y_center, w, h = x_center * self.width, y_center * self.height, w * self.width, h * self.height
+
+            xmin = x_center - w / 2
+            ymin = x_center - h / 2
+            xmax = x_center + w / 2
+            ymax = x_center + h / 2
 
             oba_obj = {
-                'name': name,
+                'clas_id': clas_id,
+                'clas': clas,
                 'box': [
                     [xmin, ymin],
                     [xmax, ymin],

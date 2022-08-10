@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+from pathlib import Path
 
 
 class Image:
@@ -10,7 +11,7 @@ class Image:
     def __init__(self):
         pass
 
-    def read(self):
+    def read(self, image_abspath, image_transform=None):
         raise NotImplementedError
 
     def write(self):
@@ -18,13 +19,16 @@ class Image:
 
 
 class ObjectDetectionImage(Image):
-    def __init__(self, image_abspath, image_transform=None):
+    def __init__(self):
         super(ObjectDetectionImage, self).__init__()
+        self.image_abspath = None
+        self.image_transform = None
+        self.data = None
+        self.height, self.width, self.channels = None, None, None
 
+    def read(self, image_abspath, image_transform=None):
         self.image_abspath = image_abspath
         self.image_transform = image_transform
-
-    def read(self):
         # 能够读取中文路径，c,h,w BGR
         image = cv2.imdecode(np.fromfile(self.image_abspath, dtype=np.uint8), cv2.IMREAD_COLOR)
         if self.image_transform:
@@ -35,34 +39,32 @@ class ObjectDetectionImage(Image):
 
         return self
 
-    def write(self):
-        pass
+    def write(self, image_abspath):
+        cv2.imencode(Path(image_abspath).suffix, self.data)[1].tofile(image_abspath)
+
+
+    def to_generic_image(self):
+        odi = ObjectDetectionImage()
+        odi.image_abspath = self.image_abspath
+        odi.image_transform = self.image_transform
+        odi.data = self.data
+        odi.width = self.width
+        odi.height = self.height
+        odi.channels = self.channels
+        return odi
 
 
 class VOCImage(ObjectDetectionImage):
 
-    def __init__(self, image_abspath, image_transform=None):
-        super(VOCImage, self).__init__(image_abspath, image_transform)
+    def __init__(self):
+        super(VOCImage, self).__init__()
 
-    def to_generic_image(self):
-        odi = ObjectDetectionImage(self.image_abspath, self.image_transform)
-        odi.data = self.data
-        odi.width = self.width
-        odi.height = self.height
-        odi.channels = self.channels
-        return odi
+
 
 
 class YOLOImage(ObjectDetectionImage):
 
-    def __init__(self, image_abspath, image_transform=None):
-        super(YOLOImage, self).__init__(image_abspath, image_transform)
+    def __init__(self):
+        super(YOLOImage, self).__init__()
 
-    def to_generic_image(self):
-        odi = ObjectDetectionImage(self.image_abspath, self.image_transform)
-        # 是否使用data的引用 TODO
-        odi.data = self.data
-        odi.width = self.width
-        odi.height = self.height
-        odi.channels = self.channels
-        return odi
+
