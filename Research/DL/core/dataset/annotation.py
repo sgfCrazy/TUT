@@ -7,7 +7,7 @@ class Annotation:
     def __init__(self):
         pass
 
-    def write(self):
+    def write(self, anno_abspath):
         raise NotImplementedError
 
     def read(self, anno_abspath, anno_transform=None):
@@ -46,9 +46,7 @@ class ObjectDetectionAnnotation(Annotation):
         """
         self.objects = []
 
-
-
-    def write(self):
+    def write(self, anno_abspath):
         """
 
         """
@@ -103,11 +101,18 @@ class VOCObjectDetectionAnnotation(ObjectDetectionAnnotation):
         self.filename = self._get_single_node_value(root_node, 'filename')
 
         source_node = self._get_single_node(root_node, 'source')
-        self.source = {}
+        self.source = {'database': "", 'annotation': "", 'image': "", 'flickrid': ""}
         if source_node is not None:
             self.source['database'] = self._get_single_node_value(source_node, 'database')
             self.source['annotation'] = self._get_single_node_value(source_node, 'annotation')
             self.source['image'] = self._get_single_node_value(source_node, 'image')
+            self.source['flickrid'] = self._get_single_node_value(source_node, 'flickrid')
+
+        owner_node = self._get_single_node(root_node, 'owner')
+        self.owner = {'flickrid': "", 'name': ""}
+        if owner_node is not None:
+            self.owner['flickrid'] = self._get_single_node_value(owner_node, 'flickrid')
+            self.owner['name'] = self._get_single_node_value(owner_node, 'name')
 
         size_node = self._get_single_node(root_node, 'size')
         self.size = {}
@@ -154,33 +159,102 @@ class VOCObjectDetectionAnnotation(ObjectDetectionAnnotation):
     def write(self, anno_abspath):
         # 1.创建DOM树对象
         dom = minidom.Document()
+
+        def create_node(folder_name, folder_value=None):
+            node = dom.createElement(folder_name)
+            if folder_value is None:
+                txt_value = dom.createTextNode(str(folder_value))
+                txt_value.appendChild(txt_value)
+            return node
+
         # 2.创建根节点。每次都要用DOM对象来创建任何节点。
-        root_node = dom.createElement('annotation')
+        root_node = create_node('annotation')
 
         # 创建 folder 节点
-        folder_node = dom.createElement('folder')
-        folder_txt = dom.createTextNode(self.folder)
-        folder_node.appendChild(folder_txt)
+        folder_node = create_node('folder', self.folder)
 
-        # 创建 folder 节点
-        filename_node = dom.createElement('filename')
-        filename_txt = dom.createTextNode(self.filename)
-        filename_node.appendChild(filename_txt)
+        # 创建 filename 节点
+        filename_node = create_node('filename', self.filename)
 
         # 创建 source 节点
-        source_node = dom.createElement('source')
-
+        source_node = create_node('source')
         # 创建 database 节点
+        source_database_node = create_node('source', self.source['database'])
+        # 创建 annotation 节点
+        source_annotation_node = create_node('annotation', self.source['annotation'])
+        # 创建 image 节点
+        source_image_node = create_node('image', self.source['image'])
+        # 创建 flickrid 节点
+        source_flickrid_node = create_node('flickrid', self.source['flickrid'])
+        source_node.appendChild(source_database_node)
+        source_node.appendChild(source_annotation_node)
+        source_node.appendChild(source_image_node)
+        source_node.appendChild(source_flickrid_node)
 
-        filename_txt = dom.createTextNode(self.filename)
-        filename_node.appendChild(filename_txt)
+        # 创建 owner 节点
+        owner_node = create_node('owner')
+        # 创建 flickrid 节点
+        owner_flickrid_node = create_node('flickrid', self.owner['flickrid'])
+        # 创建 name 节点
+        owner_name_node = create_node('name', self.owner['name'])
+        owner_node.appendChild(owner_flickrid_node)
+        owner_node.appendChild(owner_name_node)
 
+        # 创建 size 节点
+        size_node = create_node('size')
+        size_width_node = create_node('width', self.size['width'])
+        size_height_node = create_node('height', self.size['height'])
+        size_depth_node = create_node('depth', self.size['depth'])
+        size_node.appendChild(size_width_node)
+        size_node.appendChild(size_height_node)
+        size_node.appendChild(size_depth_node)
 
+        # 创建 segmented 节点
+        segmented_node = create_node('segmented', self.segmented)
 
-        # 3.用DOM对象添加根节点
+        objects_node = []
+        # objects node start ----------------------------------------------------
+        for object in self.objects:
+            # 创建 object 节点
+            object_node = create_node('object')
+            object_name_node = create_node('name', object['name'])
+            object_pose_node = create_node('pose', object['pose'])
+            object_truncated_node = create_node('truncated', object['truncated'])
+            object_difficult_node = create_node('difficult', object['difficult'])
+
+            # 创建 bndbox 节点
+            bndbox_node = create_node('bndbox')
+            bndbox_xmin_node = create_node('xmin', object['bndbox']['xmin'])
+            bndbox_ymin_node = create_node('ymin', object['bndbox']['ymin'])
+            bndbox_xmax_node = create_node('xmax', object['bndbox']['xmax'])
+            bndbox_ymax_node = create_node('ymax', object['bndbox']['ymax'])
+            bndbox_node.appendChild(bndbox_xmin_node)
+            bndbox_node.appendChild(bndbox_ymin_node)
+            bndbox_node.appendChild(bndbox_xmax_node)
+            bndbox_node.appendChild(bndbox_ymax_node)
+
+            object_node.appendChild(object_name_node)
+            object_node.appendChild(object_pose_node)
+            object_node.appendChild(object_truncated_node)
+            object_node.appendChild(object_difficult_node)
+            object_node.appendChild(bndbox_node)
+
+            objects_node.append(object_node)
+        # objects node end ----------------------------------------------------
+        root_node.appendChild(folder_node)
+        root_node.appendChild(filename_node)
+        root_node.appendChild(source_node)
+        root_node.appendChild(owner_node)
+        root_node.appendChild(size_node)
+        root_node.appendChild(segmented_node)
+
+        for object_node in objects_node:
+            root_node.appendChild(object_node)
+
+        # 用DOM对象添加根节点
         dom.appendChild(root_node)
 
-        pass
+        dom.toprettyxml()
 
     def to_generic_anno(self) -> ObjectDetectionAnnotation:
         """
@@ -217,8 +291,6 @@ class YOLOObjectDetectionAnnotation(ObjectDetectionAnnotation):
 
     def __init__(self):
         super(YOLOObjectDetectionAnnotation, self).__init__()
-
-
 
     def read(self, image, classes_name, anno_abspath, anno_transform=None):
 

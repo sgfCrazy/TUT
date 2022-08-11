@@ -14,7 +14,7 @@ class Image:
     def read(self, image_abspath, image_transform=None):
         raise NotImplementedError
 
-    def write(self):
+    def write(self, image_abspath):
         raise NotImplementedError
 
 

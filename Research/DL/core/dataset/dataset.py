@@ -356,7 +356,12 @@ class VOCObjectDetectionDataset(ObjectDetectionDataset):
         for sample in samples:
             sample_id = sample.sample_id
             image = sample.image
+            image_abspath = Path(images_dirname, f"{sample_id}.jpg")
+            image.write(image_abspath)
+
             anno = sample.anno
+            anno_abspath = Path(annos_dirname, f"{sample_id}.jpg")
+            anno.write(anno_abspath)
 
 
             pass
