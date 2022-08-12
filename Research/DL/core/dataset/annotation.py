@@ -1,6 +1,6 @@
 from xml.dom import minidom
 import logging
-from abc import ABCMeta, abstractmethod
+import simplejson as json
 
 
 class Annotation:
@@ -13,8 +13,7 @@ class Annotation:
     def read(self, anno_abspath, anno_transform=None):
         raise NotImplementedError
 
-    # def to_generic_anno(self):
-    #     raise NotImplementedError
+
 
 
 class ObjectDetectionAnnotation(Annotation):
@@ -58,6 +57,9 @@ class ObjectDetectionAnnotation(Annotation):
         """
         # TODO
         pass
+
+    def to_generic_anno(self):
+        raise NotImplementedError
 
 
 class VOCObjectDetectionAnnotation(ObjectDetectionAnnotation):
@@ -162,9 +164,9 @@ class VOCObjectDetectionAnnotation(ObjectDetectionAnnotation):
 
         def create_node(folder_name, folder_value=None):
             node = dom.createElement(folder_name)
-            if folder_value is None:
+            if folder_value is not None:
                 txt_value = dom.createTextNode(str(folder_value))
-                txt_value.appendChild(txt_value)
+                node.appendChild(txt_value)
             return node
 
         # 2.创建根节点。每次都要用DOM对象来创建任何节点。
@@ -254,7 +256,10 @@ class VOCObjectDetectionAnnotation(ObjectDetectionAnnotation):
         # 用DOM对象添加根节点
         dom.appendChild(root_node)
 
-        dom.toprettyxml()
+        with open(anno_abspath, 'w', encoding='UTF-8') as f:
+            # writexml()第一个参数是目标文件对象，第二个参数是根节点的缩进格式，第三个参数是其他子节点的缩进格式，
+            # 第四个参数制定了换行格式，第五个参数制定了xml内容的编码。
+            dom.writexml(f, indent='', addindent='\t', newl='\n', encoding='UTF-8')
 
     def to_generic_anno(self) -> ObjectDetectionAnnotation:
         """
@@ -305,9 +310,9 @@ class YOLOObjectDetectionAnnotation(ObjectDetectionAnnotation):
         with open(self.anno_abspath, 'r') as f:
             lines = f.readlines()
 
-        object = {}
         # read txt start---------------------------------------------------------
         for line in lines:
+            object = {}
             line = line.strip()
             # 标注框的中心点坐标和宽高
             clas_id, x_center, y_center, w, h = line.split()
@@ -323,9 +328,13 @@ class YOLOObjectDetectionAnnotation(ObjectDetectionAnnotation):
         # read txt end---------------------------------------------------------
         return self
 
-    def write(self):
-        # TODO
-        pass
+    def write(self, anno_abspath):
+
+        with open(anno_abspath, 'w') as f:
+            for object in self.objects:
+                clas_id = object['clas_id']
+                x_center, y_center, w, h = object["x_center"], object["y_center"], object["w"], object["h"]
+                f.write(f"{clas_id} {x_center} {y_center} {w} {h}\n")
 
     def to_generic_anno(self) -> ObjectDetectionAnnotation:
         """
@@ -363,3 +372,18 @@ class YOLOObjectDetectionAnnotation(ObjectDetectionAnnotation):
             oba.objects.append(oba_obj)
 
         return oba
+
+
+class COCOObjectDetectionAnnotation(ObjectDetectionAnnotation):
+    def __init__(self):
+        super(COCOObjectDetectionAnnotation, self).__init__()
+
+    def read(self, json_dict, anno_transform=None):
+
+        if isinstance(json_dict, str):
+            with open(json_dict, 'r') as f:
+                json_dict = json.load(f)
+
+
+
+        pass

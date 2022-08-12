@@ -68,3 +68,9 @@ class YOLOImage(ObjectDetectionImage):
         super(YOLOImage, self).__init__()
 
 
+class COCOImage(ObjectDetectionImage):
+
+    def __init__(self):
+        super(COCOImage, self).__init__()
+
+

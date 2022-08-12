@@ -1,15 +1,16 @@
 from torch.utils.data import Dataset
 from .sample import ObjectDetectionSample, Sample
 from typing import List
-from .image import VOCImage, YOLOImage
-from .annotation import VOCObjectDetectionAnnotation, YOLOObjectDetectionAnnotation
+from .image import VOCImage, YOLOImage, COCOImage, Image, ObjectDetectionImage
+from .annotation import VOCObjectDetectionAnnotation, YOLOObjectDetectionAnnotation, COCOObjectDetectionAnnotation
 
 from pathlib import Path
-import logging
+from ..common.logger import *
 from abc import ABCMeta, abstractmethod
 import json
+from tqdm import tqdm
 
-logger = logging.getLogger(__name__)
+logger = Logger().logger(__name__)
 
 
 class ObjectDetectionDataset(Dataset):
@@ -41,6 +42,9 @@ class ObjectDetectionDataset(Dataset):
 
     def __getitem__(self, idx):
         return self.samples[idx]
+
+    def _read_image(self, image_abspath) -> ObjectDetectionImage:
+        return ObjectDetectionImage().read(image_abspath, self.image_transform)
 
     def read(self, dataset_dirname) -> List[Sample]:
         self.dataset_dirname = dataset_dirname
@@ -167,8 +171,97 @@ class ObjectDetectionDataset(Dataset):
 
 
 class COCOObjectDetectionDataset(ObjectDetectionDataset):
-    def __init__(self):
-        super(COCOObjectDetectionDataset, self).__init__()
+    def __init__(self, image_transform=None, anno_transform=None):
+        super(COCOObjectDetectionDataset, self).__init__(image_transform, anno_transform)
+
+    def read(self, dataset_dirname, classes_name_abspath=None, types=None):
+        self.dataset_dirname = dataset_dirname  # coco数据集的根目录的路径
+
+        self.classes_name_abspath = classes_name_abspath if classes_name_abspath else Path(self.dataset_dirname, 'label.txt')
+        self.classes_name = self._read_classes_name(self.classes_name_abspath)  # TODO
+
+        self.types = types if types else ['train', 'test', 'val']
+
+        self._read()
+
+    def _read(self):
+
+        for type in self.types:
+            json_abspath = Path(self.dataset_dirname, f'{type}.json')
+            images_dirname = Path(self.dataset_dirname, '%s' % type)
+            logger.info(f"COCO read {type} samples ...")
+
+            samples = self._read_samples(json_abspath, images_dirname)
+
+            if type == "train":
+                self.train_samples = samples
+            elif type == "eval":
+                self.eval_samples = samples
+            elif type == "test":
+                self.test_samples = samples
+            else:
+                raise ValueError
+
+        # 默认为 train 模式
+        self.mode_dict["train"]()
+
+
+    def _read_samples(self, json_abspath, images_dirname):
+        samples = []
+
+        with open(json_abspath, 'r') as f:
+            json_dict = json.load(f)
+
+        def change_json():
+            """
+            将原始json转为每个样本对应一个json的形式
+            """
+            annotations = json_dict['annotations']
+            images_dict = {image['id']: image for image in json_dict['images']}
+            categories_dict = {category['id']: category for category in json_dict['categories']}
+
+            # new_json_dict = {}.setdefault({'image': None, 'anno': {}.setdefault(())})
+            new_json_dict = {}
+
+            for annotation in annotations:
+                segmentation = annotation['segmentation']
+                area = annotation['area']
+                iscrowd = annotation['iscrowd']
+                image_id = annotation['image_id']
+                category_id = annotation['category_id']
+                category = categories_dict[category_id]
+                image = images_dict[image_id]
+
+                sample_id = Path(image["file_name"]).stem
+                if sample_id not in new_json_dict.keys():
+                    new_json_dict[sample_id] = {"image": None, "anno": []}
+                new_json_dict[sample_id]['image'] = image
+                new_json_dict[sample_id]['anno'].append(annotation)
+
+            return new_json_dict
+
+        new_json_dict = change_json()
+
+        for sample_id, sample_dict in new_json_dict.keys():
+            image_abspath = Path(images_dirname, sample_id)
+
+            image_abspath =Path(images_dirname, sample_id + ".jpg")
+            anno_dict = sample_dict['anno']
+
+            image = self.read_image()
+            anno = self._read_anno(anno_dict)
+
+            ods = ObjectDetectionSample(sample_id, image, anno)
+            samples.append(ods)
+
+
+        return samples
+
+    # def _read_image(self, image_abspath):
+    #     pass
+
+    def _read_anno(self, anno_abspath) -> COCOObjectDetectionAnnotation:
+        return COCOObjectDetectionAnnotation().read(anno_abspath, self.anno_transform)
 
     def _write(self, new_dataset_dirname):
         pass
@@ -183,10 +276,12 @@ class YOLOObjectDetectionDataset(ObjectDetectionDataset):
 
     def read(self, dataset_dirname, classes_name_abspath=None, types=None):
         self.dataset_dirname = dataset_dirname  # voc数据集的根目录的路径
-        self.classes_name_abspath = classes_name_abspath if classes_name_abspath else Path(self.dataset_dirname,
-                                                                                           'label.txt')
+        self.classes_name_abspath = classes_name_abspath if classes_name_abspath else Path(self.dataset_dirname, 'label.txt')
         self.classes_name = self._read_classes_name(self.classes_name_abspath)
-        self._read(types)
+
+        self.types = types if types else ['train', 'test', 'eval']
+
+        self._read()
         return self
 
     def _read_anno(self, anno_abspath, image) -> YOLOObjectDetectionAnnotation:
@@ -209,30 +304,36 @@ class YOLOObjectDetectionDataset(ObjectDetectionDataset):
 
         return samples_path
 
-    def _get_samples(self, images_dirname, annos_dirname):
+    def _read_samples(self, images_dirname, annos_dirname):
         samples_path = self._get_samples_path(images_dirname, annos_dirname)
         samples = []
 
-        for sample_id, image_abspath, anno_abspath in samples_path:
+        pbar = tqdm(samples_path)
+
+        for sample_id, image_abspath, anno_abspath in pbar:
             image = self._read_image(image_abspath)
             anno = self._read_anno(anno_abspath, image)
 
             sample = ObjectDetectionSample(sample_id, image=image, anno=anno)
             samples.append(sample)
 
+            pbar.set_description(f"{sample_id}")
+
         return samples
 
-    def _read(self, types):
+    def _read(self):
         """
         读取数据集
         """
-        if types is None:
-            types = ['train', 'test', 'eval']
-        for type in types:
+
+        for type in self.types:
             images_dirname = Path(self.dataset_dirname, 'images', '%s' % type)
             annos_dirname = Path(self.dataset_dirname, 'labels', '%s' % type)
 
-            samples = self._get_samples(images_dirname, annos_dirname)
+            samples = self._read_samples(images_dirname, annos_dirname)
+
+            logger.info(f"VOC read {type} samples")
+
             if type == "train":
                 self.train_samples = samples
             elif type == "eval":
@@ -243,8 +344,55 @@ class YOLOObjectDetectionDataset(ObjectDetectionDataset):
                 raise ValueError
 
         # 默认为 train 模式
-        self.mode = "train"
-        self.samples: List[ObjectDetectionSample] = self.train_samples
+        self.mode_dict['train']()
+
+    def write(self, new_dataset_dirname=None):
+        """
+        将数据集写到新的目录下
+        """
+        new_dataset_dirname = new_dataset_dirname if new_dataset_dirname else self.dataset_dirname
+        Path(new_dataset_dirname).mkdir(parents=True, exist_ok=True)
+        # 写label.txt
+        new_classes_name_abspath = Path(new_dataset_dirname, 'label.txt')
+        self._write_classes_name(new_classes_name_abspath)
+
+        self._write(new_dataset_dirname)
+        pass
+
+    def _write(self, new_dataset_dirname):
+
+        for type in self.types:
+
+            if type == "train":
+                samples = self.train_samples
+            elif type == "eval":
+                samples = self.eval_samples
+            elif type == "test":
+                samples = self.test_samples
+            else:
+                raise ValueError
+
+            new_images_dirname = Path(new_dataset_dirname, type, 'images')
+            new_annos_dirname = Path(new_dataset_dirname, type, 'labels')
+            new_images_dirname.mkdir(parents=True, exist_ok=True)
+            new_annos_dirname.mkdir(parents=True, exist_ok=True)
+
+            logger.info(f"VOC write {type} samples ...")
+            self._write_samples(samples, new_images_dirname, new_annos_dirname)
+
+    def _write_samples(self, samples, images_dirname, annos_dirname):
+        pbar = tqdm(samples)
+        for sample in pbar:
+            sample_id = sample.sample_id
+            image = sample.image
+            image_abspath = Path(images_dirname, f"{sample_id}.jpg")
+            image.write(image_abspath)
+
+            anno = sample.anno
+            anno_abspath = Path(annos_dirname, f"{sample_id}.txt")
+            anno.write(anno_abspath)
+
+            pbar.set_description(f"{sample_id}")
 
 
 class VOCObjectDetectionDataset(ObjectDetectionDataset):
@@ -286,21 +434,32 @@ class VOCObjectDetectionDataset(ObjectDetectionDataset):
     def _read_anno(self, anno_abspath) -> VOCObjectDetectionAnnotation:
         return VOCObjectDetectionAnnotation().read(anno_abspath, self.anno_transform)
 
-    def read(self, dataset_dirname):
+    def read(self, dataset_dirname, classes_name_abspath=None, types=None):
         self.dataset_dirname = dataset_dirname  # voc数据集的根目录的路径
+
+        self.classes_name_abspath = classes_name_abspath if classes_name_abspath else Path(self.dataset_dirname,
+                                                                                           'label.txt')
+        self.classes_name = self._read_classes_name(self.classes_name_abspath)
+
+        self.types = types if types else ['train', 'test', 'val']
+
         self._read()
         return self
 
-    def _get_samples(self, txt_abspath):
+    def _read_samples(self, txt_abspath):
         samples_path = self._get_samples_path(txt_abspath)
         samples = []
 
-        for sample_id, image_abspath, anno_abspath in samples_path:
+        pbar = tqdm(samples_path)
+
+        for sample_id, image_abspath, anno_abspath in pbar:
             image = self._read_image(image_abspath)
             anno = self._read_anno(anno_abspath)
 
             sample = ObjectDetectionSample(sample_id, image=image, anno=anno)
             samples.append(sample)
+
+            pbar.set_description(f"{sample_id}")
 
         return samples
 
@@ -312,66 +471,78 @@ class VOCObjectDetectionDataset(ObjectDetectionDataset):
         self.annos_dirname = Path(self.dataset_dirname, 'Annotations')
         self.split_txt_dirname = Path(self.dataset_dirname, 'ImageSets', 'Main')
 
-        train_txt_abspath = Path(self.split_txt_dirname, 'train.txt')
-        val_txt_abspath = Path(self.split_txt_dirname, 'val.txt')
-        test_txt_abspath = Path(self.split_txt_dirname, 'test.txt')
+        for type in self.types:
+            txt_abspath = Path(self.split_txt_dirname, f'{type}.txt')
+            logger.info(f"VOC read {type} samples ...")
+            samples = self._read_samples(txt_abspath)
 
-        self.classes_name_abspath = Path(self.dataset_dirname, 'label.txt')
-        self.classes_name = self._read_classes_name(self.classes_name_abspath)
-        self.train_samples: List[ObjectDetectionSample] = self._get_samples(train_txt_abspath)
-        self.eval_samples: List[ObjectDetectionSample] = self._get_samples(val_txt_abspath)
-        self.test_samples: List[ObjectDetectionSample] = self._get_samples(test_txt_abspath)
+            if type == "train":
+                self.train_samples = samples
+            elif type == "eval":
+                self.eval_samples = samples
+            elif type == "test":
+                self.test_samples = samples
+            else:
+                raise ValueError
 
         # 默认为 train 模式
-        self.mode = "train"
-        self.samples: List[ObjectDetectionSample] = self.train_samples
+        self.mode_dict["train"]()
 
     def write(self, new_dataset_dirname=None):
         """
         将数据集写到新的目录下
         """
         new_dataset_dirname = new_dataset_dirname if new_dataset_dirname else self.dataset_dirname
+
+        # 写label.txt
+        new_classes_name_abspath = Path(new_dataset_dirname, 'label.txt')
+        self._write_classes_name(new_classes_name_abspath)
+
         self._write(new_dataset_dirname)
 
     def _write(self, new_dataset_dirname):
-        # TODO
-        new_images_dirname = Path(new_dataset_dirname, 'JPEGImages').mkdir(parents=True, exist_ok=True)
-        new_annos_dirname = Path(new_dataset_dirname, 'Annotations').mkdir(parents=True, exist_ok=True)
-        new_split_txt_dirname = Path(new_dataset_dirname, 'ImageSets', 'Main').mkdir(parents=True, exist_ok=True)
 
-        train_txt_abspath = Path(new_split_txt_dirname, 'train.txt')
-        val_txt_abspath = Path(new_split_txt_dirname, 'val.txt')
-        test_txt_abspath = Path(new_split_txt_dirname, 'test.txt')
+        new_images_dirname = Path(new_dataset_dirname, 'JPEGImages')
+        new_images_dirname.mkdir(parents=True, exist_ok=True)
 
-        self.classes_name_abspath = Path(self.dataset_dirname, 'label.txt')
-        # 写label.txt
-        self._write_classes_name(self.classes_name_abspath)
+        new_annos_dirname = Path(new_dataset_dirname, 'Annotations')
+        new_annos_dirname.mkdir(parents=True, exist_ok=True)
 
-        self._write_samples(self.train_samples, new_images_dirname, new_annos_dirname, train_txt_abspath)
-        self._write_samples(self.eval_samples, new_images_dirname, new_annos_dirname, val_txt_abspath)
-        self._write_samples(self.test_samples, new_images_dirname, new_annos_dirname, test_txt_abspath)
+        new_split_txt_dirname = Path(new_dataset_dirname, 'ImageSets', 'Main')
+        new_split_txt_dirname.mkdir(parents=True, exist_ok=True)
+
+        for type in self.types:
+            txt_abspath = Path(new_split_txt_dirname, f'{type}.txt')
+            logger.info(f"VOC write {type} samples ...")
+
+            if type == "train":
+                samples = self.train_samples
+            elif type == "eval":
+                samples = self.eval_samples
+            elif type == "test":
+                samples = self.test_samples
+            else:
+                raise ValueError
+
+            self._write_samples(samples, new_images_dirname, new_annos_dirname, txt_abspath)
 
     def _write_samples(self, samples, images_dirname, annos_dirname, txt_abspath):
 
-        for sample in samples:
-            sample_id = sample.sample_id
-            image = sample.image
-            image_abspath = Path(images_dirname, f"{sample_id}.jpg")
-            image.write(image_abspath)
+        with open(txt_abspath, 'w') as f:
+            pbar = tqdm(samples)
+            for sample in pbar:
+                sample_id = sample.sample_id
+                image = sample.image
+                image_abspath = Path(images_dirname, f"{sample_id}.jpg")
+                image.write(image_abspath)
 
-            anno = sample.anno
-            anno_abspath = Path(annos_dirname, f"{sample_id}.jpg")
-            anno.write(anno_abspath)
+                anno = sample.anno
+                anno_abspath = Path(annos_dirname, f"{sample_id}.xml")
+                anno.write(anno_abspath)
 
+                pbar.set_description(f"{sample_id}")
 
-            pass
-        pass
-
-    def _write_image(self):
-        pass
-
-    def _write_anno(self):
-        pass
+                f.write(f"{sample_id}\n")
 
 # class ObjectDetectionDatasetTransfer:
 #

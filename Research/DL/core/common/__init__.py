@@ -1,2 +1,2 @@
 from .shape_spec import ShapeSpec
-from logger import *
+from .logger import *
