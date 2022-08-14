@@ -26,9 +26,9 @@ class ObjectDetectionAnnotation(Annotation):
         self.anno_abspath = None
         self.anno_transform = None
 
-        self.height = None
-        self.width = None
-        self.channels = None
+        # self.height = None
+        # self.width = None
+        # self.channels = None
 
         """
             oba_obj = {
@@ -66,6 +66,9 @@ class VOCObjectDetectionAnnotation(ObjectDetectionAnnotation):
 
     def __init__(self):
         super(VOCObjectDetectionAnnotation, self).__init__()
+        # self.height = None
+        # self.width = None
+        # self.channels = None
 
     def _get_nodes(self, parent_node, tag_name):
         """
@@ -297,6 +300,7 @@ class YOLOObjectDetectionAnnotation(ObjectDetectionAnnotation):
     def __init__(self):
         super(YOLOObjectDetectionAnnotation, self).__init__()
 
+
     def read(self, image, classes_name, anno_abspath, anno_transform=None):
 
         # self.image = image
@@ -380,10 +384,41 @@ class COCOObjectDetectionAnnotation(ObjectDetectionAnnotation):
 
     def read(self, json_dict, anno_transform=None):
 
+
+        self.anno_transform = anno_transform
+
         if isinstance(json_dict, str):
+            self.anno_abspath = json_dict
             with open(json_dict, 'r') as f:
                 json_dict = json.load(f)
+        for anno_item in json_dict:
+            object = {}
+            segmentation = anno_item['segmentation']
+            area = anno_item['area']
+            iscrowd = anno_item['iscrowd']
+            image_id = anno_item['image_id']
+            bbox = anno_item['bbox']
+            category_name = anno_item['category_name']
+            category_id = anno_item['category_id']
+
+            object['segmentation'] = segmentation
+            object['area'] = area
+            object['iscrowd'] = iscrowd
+            object['image_id'] = image_id
+            object['bbox'] = bbox
+            object['category_name'] = category_name
+            object['category_id'] = category_id
+
+            self.objects.append(object)
 
 
+        return self
 
-        pass
+    def write(self, json_dict):
+
+        if isinstance(json_dict, str):
+            pass
+        else:
+            # image_id = json_dict["images"][-1]["id"]
+            print()
+            pass
