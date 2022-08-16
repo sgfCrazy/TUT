@@ -4,7 +4,7 @@ from Research.DL.core.dataset import VOCObjectDetectionDataset, YOLOObjectDetect
 # from Research.DL.core.dataset import ObjectDetectionDatasetTransfer
 
 platform = "self"
-platform = "zkhy"
+# platform = "zkhy"
 
 
 def test_voc():
@@ -75,7 +75,9 @@ def test_coco_to_voc():
     else:
         dataset_dirname = r'C:\Users\86158\Desktop\HyperDL\data\COCO'
         classes_name_abspath = r'C:\Users\86158\Desktop\HyperDL\data\COCO\label.txt'
-        new_dataset_dirname = r'C:\Users\86158\Desktop\HyperDL\data\COCO\new_COCO'
+        new_dataset_dirname = r'C:\Users\86158\Desktop\HyperDL\data\new_COCO'
+        yolo_dataset_dirname = r'C:\Users\86158\Desktop\HyperDL\data\new_COCO_to_YOLO'
+        voc_dataset_dirname = r'C:\Users\86158\Desktop\HyperDL\data\new_COCO_to_VOC'
 
     coco_odd = COCOObjectDetectionDataset().read(dataset_dirname)
     # coco_odd.write(new_dataset_dirname)
@@ -84,6 +86,8 @@ def test_coco_to_voc():
     odd = coco_odd.to_generic_dataset()
     voc_odd = odd.to_voc()
     voc_odd.write(voc_dataset_dirname)
+
+    voc_odd = VOCObjectDetectionDataset().read(voc_dataset_dirname)
     print()
 
 
@@ -104,3 +108,4 @@ if __name__ == '__main__':
     # test_voc()
     # test_coco()
     test_coco_to_voc()
+    # test_voc_to_coco()

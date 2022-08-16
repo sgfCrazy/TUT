@@ -249,6 +249,72 @@ class ObjectDetectionDataset:
 
         return voc_odd
 
+    def to_coco(self, new_dataset_dirname=None):
+        coco_odd = COCOObjectDetectionDataset()
+        coco_odd.dataset_dirname = new_dataset_dirname if new_dataset_dirname else self.dataset_dirname
+        coco_odd.classes_name_abspath = self.classes_name_abspath
+        coco_odd.classes_name = self.classes_name
+
+        image_id = 1
+        anno_id = 1
+
+        def _to_coco_samples(samples):
+            new_samples = []
+            new_anno_dict = {"info": {}, "licenses": [], "images": [], "annotations": [], "categories": []}
+
+            # start sample ------------------------------------
+            for sample in samples:
+                # 图像转换
+                image = sample.image
+                new_image = COCOImage()
+                new_image.image_transform = image.image_transform
+                new_image.image_abspath = image.image_abspath
+                new_image.width = image.width
+                new_image.height = image.height
+                new_image.channels = image.channels
+                new_image.data = image.data
+
+                new_anno_dict['images'].append({
+                    "license": 0,
+                    "file_name": str(Path(new_image.image_abspath).name),
+                    "coco_url": "coco_url",
+                    "height": new_image.height,
+                    "width": new_image.width,
+                    "data_captured": "data_captured",
+                    "fickr_url": "fickr_url",
+                    "id": image_id
+                })
+
+                # 标签转换
+                anno = sample.anno
+                new_anno = COCOObjectDetectionAnnotation(coco_odd.classes_name)
+                new_anno.anno_abspath = Path(str(Path(anno.anno_abspath).parent), str(Path(anno.anno_abspath).stem), '.json')  # TODO
+                new_anno.anno_transform = anno.anno_transform
+
+
+                objects = anno.objects
+                new_objects = []
+
+                # start object ---------------------------------
+                for object in objects:
+                    pass
+
+                # end object ---------------------------------
+                new_anno.objects = new_objects
+
+                ods = ObjectDetectionSample(sample_id=sample.sample_id, image=new_image, anno=new_anno)
+                new_samples.append(ods)
+            # end sample --------------------------------------
+            image_id += 1
+            return new_samples
+
+        coco_odd.train_samples = _to_coco_samples(self.train_samples)
+        coco_odd.eval_samples = _to_coco_samples(self.eval_samples)
+        coco_odd.test_samples = _to_coco_samples(self.test_samples)
+
+        coco_odd.train()
+
+        return coco_odd
 
     def train(self):
         self.mode = "train"
@@ -712,11 +778,13 @@ class VOCObjectDetectionDataset(ObjectDetectionDataset):
         # 写trainval.txt  # TODO
         txt_abspath = Path(new_split_txt_dirname, 'trainval.txt')
         samples = self.train_samples + self.eval_samples
+        images_dirname = new_images_dirname
         with open(txt_abspath, 'w') as f:
             pbar = tqdm(samples)
             for sample in pbar:
                 sample_id = sample.sample_id
-                f.write(f"{sample_id}\n")
+                image_abspath = Path(images_dirname, f"{sample_id}.jpg")
+                f.write(f"{image_abspath}\n")
 
 
 
@@ -737,7 +805,7 @@ class VOCObjectDetectionDataset(ObjectDetectionDataset):
 
                 pbar.set_description(f"{sample_id}")
 
-                f.write(f"{sample_id}\n")
+                f.write(f"{image_abspath}\n")
 
 # class ObjectDetectionDatasetTransfer:
 #

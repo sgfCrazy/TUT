@@ -185,7 +185,7 @@ class VOCObjectDetectionAnnotation(ObjectDetectionAnnotation):
         # 创建 source 节点
         source_node = create_node('source')
         # 创建 database 节点
-        source_database_node = create_node('source', self.source['database'])
+        source_database_node = create_node('database', self.source['database'])
         # 创建 annotation 节点
         source_annotation_node = create_node('annotation', self.source['annotation'])
         # 创建 image 节点
