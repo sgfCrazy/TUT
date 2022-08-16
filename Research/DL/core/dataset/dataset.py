@@ -710,7 +710,15 @@ class VOCObjectDetectionDataset(ObjectDetectionDataset):
             self._write_samples(samples, new_images_dirname, new_annos_dirname, txt_abspath)
 
         # 写trainval.txt  # TODO
-        pass
+        txt_abspath = Path(new_split_txt_dirname, 'trainval.txt')
+        samples = self.train_samples + self.eval_samples
+        with open(txt_abspath, 'w') as f:
+            pbar = tqdm(samples)
+            for sample in pbar:
+                sample_id = sample.sample_id
+                f.write(f"{sample_id}\n")
+
+
 
 
     def _write_samples(self, samples, images_dirname, annos_dirname, txt_abspath):
