@@ -73,4 +73,10 @@ class COCOImage(ObjectDetectionImage):
     def __init__(self):
         super(COCOImage, self).__init__()
 
+    def read(self, image_abspath, image_id, image_transform=None):
+
+        self.image_id = image_id
+        super().read(image_abspath, image_transform)
+        return self
+
 

@@ -15,3 +15,12 @@ if not None:
 s = ""
 if s is None:
     print("sgfsgf")
+
+from pathlib import *
+
+path = r"C:\Users\Songgf\Desktop\GIT\TUT\Research\DL\test\temp.py"
+t = Path(path)
+print()
+import sys
+print(__file__)
+print(sys.path)

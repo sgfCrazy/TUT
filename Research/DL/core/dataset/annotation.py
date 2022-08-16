@@ -64,11 +64,12 @@ class ObjectDetectionAnnotation(Annotation):
 
 class VOCObjectDetectionAnnotation(ObjectDetectionAnnotation):
 
-    def __init__(self):
+    def __init__(self, classes_name):
         super(VOCObjectDetectionAnnotation, self).__init__()
         # self.height = None
         # self.width = None
         # self.channels = None
+        self.classes_name = classes_name
 
     def _get_nodes(self, parent_node, tag_name):
         """
@@ -281,7 +282,8 @@ class VOCObjectDetectionAnnotation(ObjectDetectionAnnotation):
             ymax = object['bndbox']['ymax']
 
             oba_obj = {
-                'name': name,
+                'clas_id': self.classes_name.index(name),
+                'clas': name,
                 'box': [
                     [xmin, ymin],
                     [xmax, ymin],
@@ -379,18 +381,19 @@ class YOLOObjectDetectionAnnotation(ObjectDetectionAnnotation):
 
 
 class COCOObjectDetectionAnnotation(ObjectDetectionAnnotation):
-    def __init__(self):
+    def __init__(self, classes_name):
         super(COCOObjectDetectionAnnotation, self).__init__()
+        self.classes_name = classes_name
 
-    def read(self, json_dict, anno_transform=None):
+    def read(self, anno_abspath, json_dict, anno_transform=None):
 
 
         self.anno_transform = anno_transform
-
-        if isinstance(json_dict, str):
-            self.anno_abspath = json_dict
-            with open(json_dict, 'r') as f:
-                json_dict = json.load(f)
+        self.anno_abspath = anno_abspath
+        # if isinstance(json_dict, str):
+        #     self.anno_abspath = json_dict
+        #     with open(json_dict, 'r') as f:
+        #         json_dict = json.load(f)
         for anno_item in json_dict:
             object = {}
             segmentation = anno_item['segmentation']
@@ -400,6 +403,7 @@ class COCOObjectDetectionAnnotation(ObjectDetectionAnnotation):
             bbox = anno_item['bbox']
             category_name = anno_item['category_name']
             category_id = anno_item['category_id']
+            id = anno_item['id']
 
             object['segmentation'] = segmentation
             object['area'] = area
@@ -408,9 +412,9 @@ class COCOObjectDetectionAnnotation(ObjectDetectionAnnotation):
             object['bbox'] = bbox
             object['category_name'] = category_name
             object['category_id'] = category_id
+            object['id'] = id
 
             self.objects.append(object)
-
 
         return self
 
@@ -419,6 +423,51 @@ class COCOObjectDetectionAnnotation(ObjectDetectionAnnotation):
         if isinstance(json_dict, str):
             pass
         else:
-            # image_id = json_dict["images"][-1]["id"]
-            print()
-            pass
+            image_id = json_dict["images"][-1]["id"]
+            for object in self.objects:
+
+                json_dict['annotations'].append({
+                    "segmentation": object['segmentation'],
+                    "area": object['area'],
+                    "iscrowd": object['iscrowd'],
+                    "image_id": image_id,
+                    "bbox": object['bbox'],
+                    "category_id": object['category_id'],
+                    "id": object['id'],
+
+                })
+        return json_dict
+
+    def to_generic_anno(self) -> ObjectDetectionAnnotation:
+        """
+        子类自己去实现通用模板的转化
+        """
+        oba = ObjectDetectionAnnotation()
+        oba.anno_abspath = self.anno_abspath
+        oba.height = self.height
+        oba.width = self.width
+        oba.channels = self.channels
+
+        for object in self.objects:
+            clas_id = object['category_id']
+            clas = object['category_name']
+
+            xmin = object["bbox"][0]
+            ymin = object["bbox"][1]
+            xmax = xmin + object["bbox"][2]
+            ymax = ymin + object["bbox"][3]
+
+            oba_obj = {
+                'clas_id': self.classes_name.index(clas),
+                'clas': clas,
+                'box': [
+                    [xmin, ymin],
+                    [xmax, ymin],
+                    [xmax, ymax],
+                    [xmin, ymax],
+                    [xmin, ymin]
+                ]
+            }
+            oba.objects.append(oba_obj)
+
+        return oba

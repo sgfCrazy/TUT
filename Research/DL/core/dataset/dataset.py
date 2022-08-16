@@ -13,10 +13,14 @@ from tqdm import tqdm
 logger = Logger().logger(__name__)
 
 
-class ObjectDetectionDataset(Dataset):
+# class ObjectDetectionDataset(Dataset):
+class ObjectDetectionDataset:
 
     def __init__(self, image_transform=None, anno_transform=None):
         super(ObjectDetectionDataset, self).__init__()
+
+        self.name = "Generic"
+
         self.dataset_dirname = None
         self.classes_name = []
         self.train_samples: List[ObjectDetectionSample] = None
@@ -114,7 +118,7 @@ class ObjectDetectionDataset(Dataset):
                 # 标签转换
                 anno = sample.anno
                 new_anno = YOLOObjectDetectionAnnotation()
-                new_anno.anno_abspath = anno.anno_abspath
+                new_anno.anno_abspath = Path(str(Path(anno.anno_abspath).parent), str(Path(anno.anno_abspath).stem), '.txt')
                 new_anno.anno_transform = anno.anno_transform
                 new_anno.width = anno.width
                 new_anno.height = anno.height
@@ -143,13 +147,13 @@ class ObjectDetectionDataset(Dataset):
                     new_object["w"] = w
                     new_object["h"] = h
 
-                    new_objects.append(objects)
+                    new_objects.append(new_object)
 
                 new_anno.objects = new_objects
 
                 ods = ObjectDetectionSample(sample_id=sample.sample_id, image=new_image, anno=new_anno)
                 new_samples.append(ods)
-            return samples
+            return new_samples
 
         yolo_odd.train_samples = _to_yolo_samples(self.train_samples)
         yolo_odd.eval_samples = _to_yolo_samples(self.eval_samples)
@@ -158,6 +162,93 @@ class ObjectDetectionDataset(Dataset):
         yolo_odd.train()
 
         return yolo_odd
+
+    def to_voc(self, new_dataset_dirname=None):
+
+        voc_odd = VOCObjectDetectionDataset()
+        voc_odd.dataset_dirname = new_dataset_dirname if new_dataset_dirname else self.dataset_dirname
+        voc_odd.classes_name_abspath = self.classes_name_abspath
+        voc_odd.classes_name = self.classes_name
+
+        def _to_voc_samples(samples):
+            new_samples = []
+            for sample in samples:
+                # 图像转换
+                image = sample.image
+                new_image = VOCImage()
+                new_image.image_transform = image.image_transform
+                new_image.image_abspath = image.image_abspath
+                new_image.width = image.width
+                new_image.height = image.height
+                new_image.channels = image.channels
+                new_image.data = image.data
+
+                # 标签转换
+                anno = sample.anno
+                new_anno = VOCObjectDetectionAnnotation(voc_odd.classes_name)
+                new_anno.anno_abspath = Path(str(Path(anno.anno_abspath).parent), str(Path(anno.anno_abspath).stem), '.xml')
+                new_anno.anno_transform = anno.anno_transform
+
+                new_anno.size = {}
+                new_anno.size['width'] = image.width
+                new_anno.size['height'] = image.height
+                new_anno.size['depth'] = image.channels
+
+                new_anno.folder = str(Path(image.image_abspath).parent)
+
+                new_anno.filename = str(Path(image.image_abspath).name)
+
+                new_anno.source = {
+                    'database': "database",
+                    'annotation': "annotation",
+                    'image': "image",
+                    'flickrid': "flickrid",
+                }
+
+                new_anno.owner = {
+                    'flickrid': "flickrid",
+                    'name': "name"
+                }
+
+                new_anno.segmented = 0
+
+                objects = anno.objects
+                new_objects = []
+                for object in objects:
+                    new_object = {}
+                    new_object["name"] = object["clas"]
+                    new_object["pose"] = 0
+                    new_object["truncated"] = 0
+                    new_object["difficult"] = 0
+
+                    bndbox = {}
+
+                    p1, p2, p3, p4 = object["box"][:4]
+                    xmin, ymin = p1
+                    xmax, ymax = p3
+
+                    bndbox['xmin'] = xmin
+                    bndbox['ymin'] = ymin
+                    bndbox['xmax'] = xmax
+                    bndbox['ymax'] = ymax
+                    new_object['bndbox'] = bndbox
+
+                    new_objects.append(new_object)
+
+                new_anno.objects = new_objects
+
+                ods = ObjectDetectionSample(sample_id=sample.sample_id, image=new_image, anno=new_anno)
+                new_samples.append(ods)
+            return new_samples
+
+        voc_odd.train_samples = _to_voc_samples(self.train_samples)
+        voc_odd.eval_samples = _to_voc_samples(self.eval_samples)
+        voc_odd.test_samples = _to_voc_samples(self.test_samples)
+
+        voc_odd.train()
+
+        return voc_odd
+
 
     def train(self):
         self.mode = "train"
@@ -176,7 +267,9 @@ class COCOObjectDetectionDataset(ObjectDetectionDataset):
     def __init__(self, image_transform=None, anno_transform=None):
         super(COCOObjectDetectionDataset, self).__init__(image_transform, anno_transform)
 
-        self.categories = []
+        self.name = "COCO"
+
+        self.categories = None
         self.info = []
         self.images = []
 
@@ -185,7 +278,7 @@ class COCOObjectDetectionDataset(ObjectDetectionDataset):
 
         self.classes_name_abspath = classes_name_abspath if classes_name_abspath else Path(self.dataset_dirname,
                                                                                            'label.txt')
-        self.classes_name = self._read_classes_name(self.classes_name_abspath)  # TODO
+        self.classes_name = self._read_classes_name(self.classes_name_abspath)
 
         self.types = types if types else ['train', 'test', 'val']
 
@@ -198,7 +291,7 @@ class COCOObjectDetectionDataset(ObjectDetectionDataset):
         for type in self.types:
             json_abspath = Path(self.dataset_dirname, f'{type}.json')
             images_dirname = Path(self.dataset_dirname, '%s' % type)
-            logger.info(f"COCO read {type} samples ...")
+            logger.info(f"{self.name} read {type} samples ...")
 
             samples = self._read_samples(json_abspath, images_dirname)
 
@@ -260,13 +353,16 @@ class COCOObjectDetectionDataset(ObjectDetectionDataset):
         pbar = tqdm(new_json_dict.items())
 
         for sample_id, sample_dict in pbar:
-            image_abspath = Path(images_dirname, sample_id)
 
             image_abspath = Path(images_dirname, sample_id + ".jpg")
+            anno_abspath = Path(images_dirname, sample_id + ".json")
             anno_dict = sample_dict['anno']
 
-            image = self._read_image(image_abspath)
-            anno = self._read_anno(anno_dict)
+            image = self._read_image(image_abspath, anno_dict[0]["image_id"])
+            anno = self._read_anno(anno_abspath, anno_dict)
+            anno.width = image.width
+            anno.height = image.height
+            anno.channels = image.channels
 
             ods = ObjectDetectionSample(sample_id, image, anno)
             samples.append(ods)
@@ -275,11 +371,17 @@ class COCOObjectDetectionDataset(ObjectDetectionDataset):
 
         return samples
 
-    def _read_anno(self, anno_abspath) -> COCOObjectDetectionAnnotation:
-        return COCOObjectDetectionAnnotation().read(anno_abspath, self.anno_transform)
+    def _read_anno(self, anno_abspath, json_dict) -> COCOObjectDetectionAnnotation:
+        return COCOObjectDetectionAnnotation(self.classes_name).read(anno_abspath, json_dict, self.anno_transform)
+
+    def _read_image(self, image_abspath, image_id) -> COCOImage:
+        return COCOImage().read(image_abspath, image_id, self.image_transform)
 
     def _write(self, new_dataset_dirname):
+
         for type in self.types:
+
+            logger.info(f"{self.name} write {type} samples ...")
 
             if type == "train":
                 samples = self.train_samples
@@ -293,12 +395,9 @@ class COCOObjectDetectionDataset(ObjectDetectionDataset):
             new_images_dirname = Path(new_dataset_dirname, type)
             new_images_dirname.mkdir(parents=True, exist_ok=True)
 
-            # new_annos_dirname = Path(new_dataset_dirname, type, 'labels')
+            new_annos_abspath = Path(new_dataset_dirname, f'{type}.json')
 
-            # new_annos_dirname.mkdir(parents=True, exist_ok=True)
-
-            logger.info(f"VOC write {type} samples ...")
-            self._write_samples(samples, new_images_dirname, json_dict)
+            self._write_samples(samples, new_images_dirname, new_annos_abspath)
         pass
 
     def write(self, new_dataset_dirname):
@@ -310,7 +409,7 @@ class COCOObjectDetectionDataset(ObjectDetectionDataset):
 
         self._write(new_dataset_dirname)
 
-    def _write_samples(self, samples, images_dirname, json_dict):
+    def _write_samples(self, samples, images_dirname, new_annos_abspath):
         """
         image{
         "id" : int,
@@ -323,12 +422,16 @@ class COCOObjectDetectionDataset(ObjectDetectionDataset):
         "date_captured" : datetime,
         }
         """
+
+        json_dict = {"info": {}, "licenses": [], "images": [], "annotations": [], "categories": self.categories}
+
         pbar = tqdm(samples)
-        for image_id, sample in enumerate(pbar):
+        for sample in pbar:
             sample_id = sample.sample_id
             image = sample.image
             image_abspath = Path(images_dirname, f"{sample_id}.jpg")
             image.write(image_abspath)
+            image_id = image.image_id
 
             json_dict["images"].append(
                 {"id": image_id, "width": image.width, "height": image.height, "file_name": f"{sample_id}.jpg",
@@ -340,10 +443,15 @@ class COCOObjectDetectionDataset(ObjectDetectionDataset):
 
             pbar.set_description(f"{sample_id}")
 
+        # 写json
+        with open(new_annos_abspath, 'w') as f:
+            json.dump(json_dict, f)
+
 
 class YOLOObjectDetectionDataset(ObjectDetectionDataset):
     def __init__(self, image_transform=None, anno_transform=None):
         super(YOLOObjectDetectionDataset, self).__init__(image_transform, anno_transform)
+        self.name = "YOLO"
 
     def read(self, dataset_dirname, classes_name_abspath=None, types=None):
         self.dataset_dirname = dataset_dirname  # voc数据集的根目录的路径
@@ -399,12 +507,13 @@ class YOLOObjectDetectionDataset(ObjectDetectionDataset):
         """
 
         for type in self.types:
+
+            logger.info(f"{self.name} read {type} samples")
+
             images_dirname = Path(self.dataset_dirname, 'images', '%s' % type)
             annos_dirname = Path(self.dataset_dirname, 'labels', '%s' % type)
 
             samples = self._read_samples(images_dirname, annos_dirname)
-
-            logger.info(f"VOC read {type} samples")
 
             if type == "train":
                 self.train_samples = samples
@@ -435,7 +544,7 @@ class YOLOObjectDetectionDataset(ObjectDetectionDataset):
     def _write(self, new_dataset_dirname):
 
         for type in self.types:
-
+            logger.info(f"{self.name} write {type} samples ...")
             if type == "train":
                 samples = self.train_samples
             elif type == "val":
@@ -450,7 +559,6 @@ class YOLOObjectDetectionDataset(ObjectDetectionDataset):
             new_images_dirname.mkdir(parents=True, exist_ok=True)
             new_annos_dirname.mkdir(parents=True, exist_ok=True)
 
-            logger.info(f"VOC write {type} samples ...")
             self._write_samples(samples, new_images_dirname, new_annos_dirname)
 
     def _write_samples(self, samples, images_dirname, annos_dirname):
@@ -472,6 +580,7 @@ class VOCObjectDetectionDataset(ObjectDetectionDataset):
 
     def __init__(self, image_transform=None, anno_transform=None):
         super(VOCObjectDetectionDataset, self).__init__(image_transform, anno_transform)
+        self.name = "VOC"
 
     def _get_samples_path(self, txt_abspath):
         """
@@ -505,7 +614,7 @@ class VOCObjectDetectionDataset(ObjectDetectionDataset):
         return VOCImage().read(image_abspath, self.image_transform)
 
     def _read_anno(self, anno_abspath) -> VOCObjectDetectionAnnotation:
-        return VOCObjectDetectionAnnotation().read(anno_abspath, self.anno_transform)
+        return VOCObjectDetectionAnnotation(self.classes_name).read(anno_abspath, self.anno_transform)
 
     def read(self, dataset_dirname, classes_name_abspath=None, types=None):
         self.dataset_dirname = dataset_dirname  # voc数据集的根目录的路径
@@ -546,7 +655,7 @@ class VOCObjectDetectionDataset(ObjectDetectionDataset):
 
         for type in self.types:
             txt_abspath = Path(self.split_txt_dirname, f'{type}.txt')
-            logger.info(f"VOC read {type} samples ...")
+            logger.info(f"{self.name} read {type} samples ...")
             samples = self._read_samples(txt_abspath)
 
             if type == "train":
@@ -587,7 +696,7 @@ class VOCObjectDetectionDataset(ObjectDetectionDataset):
 
         for type in self.types:
             txt_abspath = Path(new_split_txt_dirname, f'{type}.txt')
-            logger.info(f"VOC write {type} samples ...")
+            logger.info(f"{self.name} write {type} samples ...")
 
             if type == "train":
                 samples = self.train_samples
@@ -599,6 +708,10 @@ class VOCObjectDetectionDataset(ObjectDetectionDataset):
                 raise ValueError
 
             self._write_samples(samples, new_images_dirname, new_annos_dirname, txt_abspath)
+
+        # 写trainval.txt  # TODO
+        pass
+
 
     def _write_samples(self, samples, images_dirname, annos_dirname, txt_abspath):
 
