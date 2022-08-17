@@ -16,11 +16,36 @@ def test_voc():
     else:
         dataset_dirname = r'C:\Users\86158\Desktop\HyperDL\data\VOC2007'
         new_dataset_dirname = r'C:\Users\86158\Desktop\HyperDL\data\new_VOC2007'
+        visualized_folder = r'C:\Users\86158\Desktop\HyperDL\data\voc2007_1000\VOC2007_visualized'
 
     voc_odd = VOCObjectDetectionDataset().read(dataset_dirname)
     odd = voc_odd.to_generic_dataset()
-    yolo_odd = odd.to_yolo()
-    yolo_odd.write(yolo_dataset_dirname)
+    odd.visualized(visualized_folder)
+    # yolo_odd = odd.to_yolo()
+    # yolo_odd.write(yolo_dataset_dirname)
+
+
+def test_voc_to_coco():
+
+    if platform == "zkhy":
+        dataset_dirname = r'C:\Users\Songgf\Desktop\HyperAI\data\voc2007_1000\VOC2007'
+        new_dataset_dirname = r'C:\Users\Songgf\Desktop\HyperAI\data\voc2007_1000\new_VOC2007'
+        yolo_dataset_dirname = r'C:\Users\Songgf\Desktop\HyperAI\data\voc2007_1000\new_VOC2007_to_yolo'
+    else:
+        dataset_dirname = r'C:\Users\86158\Desktop\HyperDL\data\VOC2007'
+        new_dataset_dirname = r'C:\Users\86158\Desktop\HyperDL\data\new_VOC2007'
+        yolo_dataset_dirname = r'C:\Users\86158\Desktop\HyperDL\data\new_VOC2007_to_yolo'
+        coco_dataset_dirname = r'C:\Users\86158\Desktop\HyperDL\data\new_VOC_to_COCO'
+
+    voc_odd = VOCObjectDetectionDataset().read(dataset_dirname)
+    odd = voc_odd.to_generic_dataset()
+    # yolo_odd = odd.to_yolo()
+    # yolo_odd.write(yolo_dataset_dirname)
+    coco_odd = odd.to_coco()
+    coco_odd.write(coco_dataset_dirname)
+
+    coco_odd = COCOObjectDetectionDataset().read(coco_dataset_dirname)
+    coco_odd.visualized()
     print()
 
 
@@ -34,13 +59,17 @@ def test_yolo():
         dataset_dirname = r'C:\Users\86158\Desktop\HyperDL\data\coco128_yolo'
         # classes_name_abspath = r'C:\Users\86158\Desktop\HyperDL\data\coco128_yolo\label.txt'
         new_dataset_dirname = r'C:\Users\86158\Desktop\HyperDL\data\new_coco128_yolo'
-
+        visualized_folder = r'C:\Users\86158\Desktop\HyperDL\data\coco128_yolo_visualized'
     yolo_odd = YOLOObjectDetectionDataset().read(dataset_dirname)
     # odd = yolo_odd.to_generic_dataset()
 
     # new_yolo_odd = odd.to_yolo()
 
-    yolo_odd.write(new_dataset_dirname)
+    # yolo_odd.write(new_dataset_dirname)
+
+    odd = yolo_odd.to_generic_dataset()
+    odd.visualized(visualized_folder)
+
     print()
 
 
@@ -54,14 +83,16 @@ def test_coco():
         dataset_dirname = r'C:\Users\86158\Desktop\HyperDL\data\COCO'
         classes_name_abspath = r'C:\Users\86158\Desktop\HyperDL\data\COCO\label.txt'
         new_dataset_dirname = r'C:\Users\86158\Desktop\HyperDL\data\COCO\new_COCO'
+        visualized_folder = r'C:\Users\86158\Desktop\HyperDL\data\COCO_visualized'
 
     coco_odd = COCOObjectDetectionDataset().read(dataset_dirname)
     # coco_odd.write(new_dataset_dirname)
 
 
     odd = coco_odd.to_generic_dataset()
-    yolo_odd = odd.to_yolo()
-    yolo_odd.write(yolo_dataset_dirname)
+    odd.visualized(visualized_folder)
+    # yolo_odd = odd.to_yolo()
+    # yolo_odd.write(yolo_dataset_dirname)
     print()
 
 
@@ -103,9 +134,32 @@ def test_transfer():
     pass
 
 
+def test_visualized():
+
+    if platform == "zkhy":
+        dataset_dirname = r'C:\Users\Songgf\Desktop\HyperAI\data\voc2007_1000\VOC2007'
+        new_dataset_dirname = r'C:\Users\Songgf\Desktop\HyperAI\data\voc2007_1000\new_VOC2007'
+        yolo_dataset_dirname = r'C:\Users\Songgf\Desktop\HyperAI\data\voc2007_1000\new_VOC2007_to_yolo'
+    else:
+        dataset_dirname = r'C:\Users\86158\Desktop\HyperDL\data\VOC2007'
+        new_dataset_dirname = r'C:\Users\86158\Desktop\HyperDL\data\new_VOC2007'
+        yolo_dataset_dirname = r'C:\Users\86158\Desktop\HyperDL\data\new_VOC2007_to_yolo'
+        coco_dataset_dirname = r'C:\Users\86158\Desktop\HyperDL\data\new_VOC_to_COCO'
+
+        visualized_folder = r'C:\Users\86158\Desktop\HyperDL\data/VOC2007_visualized'
+
+    voc_odd = VOCObjectDetectionDataset().read(dataset_dirname)
+    odd = voc_odd.to_generic_dataset()
+    odd.visualized(visualized_folder)
+
+
+
+    pass
+
 if __name__ == '__main__':
-    # test_yolo()
+    test_yolo()
     # test_voc()
     # test_coco()
-    test_coco_to_voc()
+    # test_coco_to_voc()
     # test_voc_to_coco()
+    # test_visualized()

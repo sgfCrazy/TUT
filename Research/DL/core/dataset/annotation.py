@@ -1,6 +1,5 @@
 from xml.dom import minidom
 import logging
-import simplejson as json
 
 
 class Annotation:

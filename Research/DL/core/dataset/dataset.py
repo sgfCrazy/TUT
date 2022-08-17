@@ -6,9 +6,9 @@ from .annotation import VOCObjectDetectionAnnotation, YOLOObjectDetectionAnnotat
 
 from pathlib import Path
 from ..common.logger import *
-from abc import ABCMeta, abstractmethod
 import json
 from tqdm import tqdm
+import cv2
 
 logger = Logger().logger(__name__)
 
@@ -118,7 +118,8 @@ class ObjectDetectionDataset:
                 # 标签转换
                 anno = sample.anno
                 new_anno = YOLOObjectDetectionAnnotation()
-                new_anno.anno_abspath = Path(str(Path(anno.anno_abspath).parent), str(Path(anno.anno_abspath).stem), '.txt')
+                new_anno.anno_abspath = Path(str(Path(anno.anno_abspath).parent), str(Path(anno.anno_abspath).stem),
+                                             '.txt')
                 new_anno.anno_transform = anno.anno_transform
                 new_anno.width = anno.width
                 new_anno.height = anno.height
@@ -186,7 +187,8 @@ class ObjectDetectionDataset:
                 # 标签转换
                 anno = sample.anno
                 new_anno = VOCObjectDetectionAnnotation(voc_odd.classes_name)
-                new_anno.anno_abspath = Path(str(Path(anno.anno_abspath).parent), str(Path(anno.anno_abspath).stem), '.xml')
+                new_anno.anno_abspath = Path(str(Path(anno.anno_abspath).parent), str(Path(anno.anno_abspath).stem),
+                                             '.xml')
                 new_anno.anno_transform = anno.anno_transform
 
                 new_anno.size = {}
@@ -257,10 +259,18 @@ class ObjectDetectionDataset:
 
         image_id = 1
         anno_id = 1
+        coco_odd.categories = [{'supercategory': clas, 'id': self.classes_name.index(clas), 'name': clas} for clas in
+                               self.classes_name]
 
-        def _to_coco_samples(samples):
+        def _to_coco_samples(samples, image_id, anno_id):
             new_samples = []
-            new_anno_dict = {"info": {}, "licenses": [], "images": [], "annotations": [], "categories": []}
+            new_anno_dict = {
+                "info": {},
+                "licenses": [],
+                "images": [],
+                "annotations": [],
+                "categories": coco_odd.categories
+            }
 
             # start sample ------------------------------------
             for sample in samples:
@@ -273,6 +283,7 @@ class ObjectDetectionDataset:
                 new_image.height = image.height
                 new_image.channels = image.channels
                 new_image.data = image.data
+                new_image.image_id = image_id
 
                 new_anno_dict['images'].append({
                     "license": 0,
@@ -288,17 +299,33 @@ class ObjectDetectionDataset:
                 # 标签转换
                 anno = sample.anno
                 new_anno = COCOObjectDetectionAnnotation(coco_odd.classes_name)
-                new_anno.anno_abspath = Path(str(Path(anno.anno_abspath).parent), str(Path(anno.anno_abspath).stem), '.json')  # TODO
+                new_anno.anno_abspath = Path(str(Path(anno.anno_abspath).parent), str(Path(anno.anno_abspath).stem),
+                                             '.json')  # TODO
                 new_anno.anno_transform = anno.anno_transform
-
 
                 objects = anno.objects
                 new_objects = []
 
                 # start object ---------------------------------
                 for object in objects:
-                    pass
+                    new_object = {}
 
+                    new_object['segmentation'] = [[1.0]]
+                    new_object['area'] = 0
+                    new_object['iscrowd'] = 0
+                    new_object['image_id'] = image_id
+
+                    p1, p2, p3, p4 = object["box"][:4]
+                    xmin, ymin = p1
+                    xmax, ymax = p3
+
+                    new_object['bbox'] = [xmin, ymin, xmax - xmin, ymax - ymin]
+                    new_object['category_name'] = object["clas"]
+                    new_object['category_id'] = self.classes_name.index(object["clas"])
+                    new_object['id'] = anno_id
+
+                    new_objects.append(new_object)
+                    anno_id += 1
                 # end object ---------------------------------
                 new_anno.objects = new_objects
 
@@ -306,15 +333,77 @@ class ObjectDetectionDataset:
                 new_samples.append(ods)
             # end sample --------------------------------------
             image_id += 1
-            return new_samples
 
-        coco_odd.train_samples = _to_coco_samples(self.train_samples)
-        coco_odd.eval_samples = _to_coco_samples(self.eval_samples)
-        coco_odd.test_samples = _to_coco_samples(self.test_samples)
+            return new_samples, image_id, anno_id
+
+        coco_odd.train_samples, image_id, anno_id = _to_coco_samples(self.train_samples, image_id, anno_id)
+        coco_odd.eval_samples, image_id, anno_id = _to_coco_samples(self.eval_samples, image_id, anno_id)
+        coco_odd.test_samples, image_id, anno_id = _to_coco_samples(self.test_samples, image_id, anno_id)
 
         coco_odd.train()
 
         return coco_odd
+
+    def _visualized_samples(self, samples, save_folder):
+
+        # 能够读取中文路径，c,h,w BGR
+        font_scale = 0.8
+        rect_thickness = 2
+        text_thickness = 1
+        # 速度：LINE_8>LINE_AA 美观：LINE_AA>LINE_8
+        font = cv2.FONT_HERSHEY_TRIPLEX
+        line_type = 8
+        text_color = (255, 255, 255)
+        rect_color = (255, 0, 0)
+
+        pbar = tqdm(samples)
+
+        for sample in pbar:
+            image = sample.image.data
+            image_filename = Path(sample.image.image_abspath).name
+            for object in sample.anno.objects:
+                clas_id = object['clas_id']
+                clas = object['clas']
+                p1, p3 = object['box'][0], object['box'][2]
+                xmin, ymin = p1
+                xmax, ymax = p3
+                xmin, ymin, xmax, ymax = int(xmin), int(ymin), int(xmax), int(ymax)
+                text_size, baseline = cv2.getTextSize(clas, font, font_scale, text_thickness)
+
+                txt_org_y = ymin - baseline
+                txt_ymin = txt_org_y - text_size[1]  # 文本框 ymin
+                txt_xmin = xmin  # 文本框 xmin
+                txt_xmax = txt_xmin + text_size[0]  # 文本框 xmax
+                txt_ymax = ymin  # 文本框 ymin
+
+                if txt_ymin < 0:
+                    txt_org_y = ymin + text_size[1]
+                    txt_ymin = ymin  # 文本框 ymin
+                    txt_xmin = xmin  # 文本框 xmin
+                    txt_xmax = txt_xmin + text_size[0]  # 文本框 xmax
+                    txt_ymax = txt_org_y + baseline  # 文本框 ymin
+                    pass
+
+                # 绘制文字包围框 thickness=-1 为填充
+                cv2.rectangle(image, (txt_xmin, txt_ymin), (txt_xmax, txt_ymax), rect_color, -1)
+                # 绘制文字
+                cv2.putText(image, clas, (xmin, txt_org_y), font, font_scale, text_color, text_thickness,
+                            lineType=line_type, bottomLeftOrigin=False)
+                # 绘制标注框
+                cv2.rectangle(image, (xmin, ymin), (xmax, ymax), rect_color, rect_thickness)
+
+            new_image_abspath = str(Path(save_folder, image_filename))
+
+            cv2.imwrite(new_image_abspath, image)
+
+            pbar.set_description(f"{image_filename}")
+        pass
+
+    def visualized(self, save_folder):
+
+        Path(save_folder).mkdir(parents=True, exist_ok=True)
+        logger.info(f"可视化...")
+        self._visualized_samples(self.samples, save_folder)
 
     def train(self):
         self.mode = "train"
@@ -419,7 +508,6 @@ class COCOObjectDetectionDataset(ObjectDetectionDataset):
         pbar = tqdm(new_json_dict.items())
 
         for sample_id, sample_dict in pbar:
-
             image_abspath = Path(images_dirname, sample_id + ".jpg")
             anno_abspath = Path(images_dirname, sample_id + ".json")
             anno_dict = sample_dict['anno']
@@ -489,7 +577,26 @@ class COCOObjectDetectionDataset(ObjectDetectionDataset):
         }
         """
 
-        json_dict = {"info": {}, "licenses": [], "images": [], "annotations": [], "categories": self.categories}
+        json_dict = {
+            "info": {
+                "description": "description",
+                "url": "url",
+                "version": "version",
+                "year": 0,
+                "contributor": "contributor",
+                "data_created": "data_created"
+            },
+            "licenses": [
+                {
+                    "url": "url",
+                    "id": 0,
+                    "name": "name",
+                }
+            ],
+            "images": [],
+            "annotations": [],
+            "categories": self.categories
+        }
 
         pbar = tqdm(samples)
         for sample in pbar:
@@ -500,8 +607,17 @@ class COCOObjectDetectionDataset(ObjectDetectionDataset):
             image_id = image.image_id
 
             json_dict["images"].append(
-                {"id": image_id, "width": image.width, "height": image.height, "file_name": f"{sample_id}.jpg",
-                 "license": None, "flickr_url": None, "coco_url": None, "date_captured": None})
+                {
+                    "id": image_id,
+                    "width": image.width,
+                    "height": image.height,
+                    "file_name": f"{sample_id}.jpg",
+                    "license": 0,
+                    "flickr_url": "flickr_url",
+                    "coco_url": "coco_url",
+                    "date_captured": "date_captured"
+                }
+            )
 
             anno = sample.anno
             # anno_abspath = Path(annos_dirname, f"{sample_id}.txt")
@@ -785,9 +901,6 @@ class VOCObjectDetectionDataset(ObjectDetectionDataset):
                 sample_id = sample.sample_id
                 image_abspath = Path(images_dirname, f"{sample_id}.jpg")
                 f.write(f"{image_abspath}\n")
-
-
-
 
     def _write_samples(self, samples, images_dirname, annos_dirname, txt_abspath):
 
