@@ -81,6 +81,7 @@ class ObjectDetectionDataset:
         def _to_generic_samples(samples):
             new_samples = []
             for sample in samples:
+
                 oba = sample.anno.to_generic_anno()
                 obi = sample.image.to_generic_image()
 
@@ -115,6 +116,8 @@ class ObjectDetectionDataset:
                 new_image.channels = image.channels
                 new_image.data = image.data
 
+
+
                 # 标签转换
                 anno = sample.anno
                 new_anno = YOLOObjectDetectionAnnotation()
@@ -129,12 +132,12 @@ class ObjectDetectionDataset:
                 new_objects = []
                 for object in objects:
                     new_object = {}
-
+                    # if "001283" in str(image.image_abspath):
+                    #     print()
                     clas = object["clas"]
                     clas_id = object["clas_id"]
-                    p1, p2, p3, p4 = object["box"][:4]
-                    xmin, ymin = p1
-                    xmax, ymax = p3
+                    xmin, ymin = object["box"][0]
+                    xmax, ymax = object["box"][2]
 
                     x_center = (xmin + xmax) / 2 / new_anno.width
                     y_center = (ymin + ymax) / 2 / new_anno.height
@@ -229,10 +232,10 @@ class ObjectDetectionDataset:
                     xmin, ymin = p1
                     xmax, ymax = p3
 
-                    bndbox['xmin'] = xmin
-                    bndbox['ymin'] = ymin
-                    bndbox['xmax'] = xmax
-                    bndbox['ymax'] = ymax
+                    bndbox['xmin'] = int(float(xmin))
+                    bndbox['ymin'] = int(float(ymin))
+                    bndbox['xmax'] = int(float(xmax))
+                    bndbox['ymax'] = int(float(ymax))
                     new_object['bndbox'] = bndbox
 
                     new_objects.append(new_object)
@@ -646,6 +649,32 @@ class YOLOObjectDetectionDataset(ObjectDetectionDataset):
         self._read()
         return self
 
+    def _read(self):
+        """
+        读取数据集
+        """
+
+        for type in self.types:
+
+            logger.info(f"{self.name} read {type} samples")
+
+            images_dirname = Path(self.dataset_dirname, '%s' % type, 'images')
+            annos_dirname = Path(self.dataset_dirname, '%s' % type, 'labels')
+
+            samples = self._read_samples(images_dirname, annos_dirname)
+
+            if type == "train":
+                self.train_samples = samples
+            elif type == "val":
+                self.eval_samples = samples
+            elif type == "test":
+                self.test_samples = samples
+            else:
+                raise ValueError
+
+        # 默认为 train 模式
+        self.mode_dict['train']()
+
     def _read_anno(self, anno_abspath, image) -> YOLOObjectDetectionAnnotation:
         return YOLOObjectDetectionAnnotation().read(image, self.classes_name, anno_abspath, self.anno_transform)
 
@@ -683,31 +712,7 @@ class YOLOObjectDetectionDataset(ObjectDetectionDataset):
 
         return samples
 
-    def _read(self):
-        """
-        读取数据集
-        """
 
-        for type in self.types:
-
-            logger.info(f"{self.name} read {type} samples")
-
-            images_dirname = Path(self.dataset_dirname, 'images', '%s' % type)
-            annos_dirname = Path(self.dataset_dirname, 'labels', '%s' % type)
-
-            samples = self._read_samples(images_dirname, annos_dirname)
-
-            if type == "train":
-                self.train_samples = samples
-            elif type == "val":
-                self.eval_samples = samples
-            elif type == "test":
-                self.test_samples = samples
-            else:
-                raise ValueError
-
-        # 默认为 train 模式
-        self.mode_dict['train']()
 
     def write(self, new_dataset_dirname=None):
         """

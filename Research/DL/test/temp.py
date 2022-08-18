@@ -15,7 +15,7 @@
 # s = ""
 # if s is None:
 #     print("sgfsgf")
-
+import os
 from pathlib import *
 
 # path = r"C:\Users\Songgf\Desktop\GIT\TUT\Research\DL\test\temp.py"
@@ -26,34 +26,43 @@ from pathlib import *
 # print(__file__)
 # print(sys.path)
 
-import cv2
-
-image_abspath = r'C:\Users\86158\Desktop\TUT\TUT\Research\DL\test\000001.jpg'
-image = cv2.imread(image_abspath)
-
-FONT_HERSHEY_SIMPLEX = 0
-FONT_HERSHEY_PLAIN = 1
-FONT_HERSHEY_DUPLEX = 2
-FONT_HERSHEY_COMPLEX = 3
-FONT_HERSHEY_TRIPLEX = 4
-FONT_HERSHEY_COMPLEX_SMALL = 5
-FONT_HERSHEY_SCRIPT_SIMPLEX = 6
-FONT_HERSHEY_SCRIPT_COMPLEX = 7
-font_scale = 1
-thickness = 1
-text = "sgf"
-font = FONT_HERSHEY_TRIPLEX
-text_size, baseline = cv2.getTextSize(text, font, font_scale, thickness)
-
-xmin, ymin = 50, 50
-xmax, ymax = 200, 200
-color = (255, 0, 0)
-cv2.rectangle(image, (xmin, ymin - text_size[1] - baseline), (xmin + text_size[0], ymin), color, -1)
-# 速度：LINE_8>LINE_AA 美观：LINE_AA>LINE_8
-cv2.putText(image, text, (xmin, ymin - baseline), font, font_scale, (255, 255, 255), thickness, lineType=8, bottomLeftOrigin=False)
-cv2.rectangle(image, (xmin, ymin), (xmax, ymax), color, -1)
-# cv2.imshow("image", image)
-cv2.imwrite("image.jpg", image)
-print()
+# import cv2
+#
+# image_abspath = r'C:\Users\86158\Desktop\TUT\TUT\Research\DL\test\000001.jpg'
+# image = cv2.imread(image_abspath)
+#
+# FONT_HERSHEY_SIMPLEX = 0
+# FONT_HERSHEY_PLAIN = 1
+# FONT_HERSHEY_DUPLEX = 2
+# FONT_HERSHEY_COMPLEX = 3
+# FONT_HERSHEY_TRIPLEX = 4
+# FONT_HERSHEY_COMPLEX_SMALL = 5
+# FONT_HERSHEY_SCRIPT_SIMPLEX = 6
+# FONT_HERSHEY_SCRIPT_COMPLEX = 7
+# font_scale = 1
+# thickness = 1
+# text = "sgf"
+# font = FONT_HERSHEY_TRIPLEX
+# text_size, baseline = cv2.getTextSize(text, font, font_scale, thickness)
+#
+# xmin, ymin = 50, 50
+# xmax, ymax = 200, 200
+# color = (255, 0, 0)
+# cv2.rectangle(image, (xmin, ymin - text_size[1] - baseline), (xmin + text_size[0], ymin), color, -1)
+# # 速度：LINE_8>LINE_AA 美观：LINE_AA>LINE_8
+# cv2.putText(image, text, (xmin, ymin - baseline), font, font_scale, (255, 255, 255), thickness, lineType=8, bottomLeftOrigin=False)
+# cv2.rectangle(image, (xmin, ymin), (xmax, ymax), color, -1)
+# # cv2.imshow("image", image)
+# cv2.imwrite("image.jpg", image)
+# print()
 
 # img = cv.putText(img, text, org, fontFace, fontScale, color, thickness=1, lineType= 8, bottomLeftOrigin=False)
+
+# t = r"100.0"
+# t = int(t)
+# t = int(t)
+
+
+cmd = r"python "
+
+os.system()

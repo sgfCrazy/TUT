@@ -146,15 +146,15 @@ class VOCObjectDetectionAnnotation(ObjectDetectionAnnotation):
             xmax = self._get_single_node_value(bndbox_node, 'xmax')
             ymax = self._get_single_node_value(bndbox_node, 'ymax')
 
-            bndbox['xmin'] = float(xmin)
-            bndbox['ymin'] = float(ymin)
-            bndbox['xmax'] = float(xmax)
-            bndbox['ymax'] = float(ymax)
+            bndbox['xmin'] = int(float(xmin))
+            bndbox['ymin'] = int(float(ymin))
+            bndbox['xmax'] = int(float(xmax))
+            bndbox['ymax'] = int(float(ymax))
 
             object['name'] = name
             object['pose'] = pose
-            object['truncated'] = int(truncated)
-            object['difficult'] = int(difficult)
+            object['truncated'] = int(float(truncated))
+            object['difficult'] = int(float(difficult))
             object['bndbox'] = bndbox
             self.objects.append(object)
         #  ---------------------- find objects end -----------------
@@ -355,13 +355,12 @@ class YOLOObjectDetectionAnnotation(ObjectDetectionAnnotation):
             clas_id = object['clas_id']
             clas = object['clas']
             x_center, y_center, w, h = object['x_center'], object['y_center'], object['w'], object['h']
-
             x_center, y_center, w, h = x_center * self.width, y_center * self.height, w * self.width, h * self.height
 
             xmin = x_center - w / 2
-            ymin = x_center - h / 2
+            ymin = y_center - h / 2
             xmax = x_center + w / 2
-            ymax = x_center + h / 2
+            ymax = y_center + h / 2
 
             oba_obj = {
                 'clas_id': clas_id,
