@@ -4,7 +4,7 @@ from Research.DL.core.dataset import VOCObjectDetectionDataset, YOLOObjectDetect
 # from Research.DL.core.dataset import ObjectDetectionDatasetTransfer
 
 platform = "self"
-platform = "zkhy"
+# platform = "zkhy"
 
 
 def test_voc():
@@ -184,10 +184,10 @@ def test_visualized():
     pass
 
 if __name__ == '__main__':
-    # test_yolo()
+    test_yolo()
     # test_voc()
     # test_coco()
     # test_coco_to_voc()
     # test_voc_to_coco()
-    test_voc_to_yolo()
+    # test_voc_to_yolo()
     # test_visualized()
