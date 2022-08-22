@@ -18,6 +18,10 @@ def test_voc():
         new_dataset_dirname = r'C:\Users\86158\Desktop\HyperDL\data\new_VOC2007'
         visualized_folder = r'C:\Users\86158\Desktop\HyperDL\data\voc2007_1000\VOC2007_visualized'
 
+        dataset_dirname = r'C:\Users\86158\Desktop\HyperDL\data\new_voc'
+        new_dataset_dirname = r'C:\Users\86158\Desktop\HyperDL\data\new_VOC2007'
+        visualized_folder = r'C:\Users\86158\Desktop\HyperDL\data\new_voc\visualized'
+
     voc_odd = VOCObjectDetectionDataset().read(dataset_dirname)
     odd = voc_odd.to_generic_dataset()
     odd.visualized(visualized_folder)
@@ -184,8 +188,8 @@ def test_visualized():
     pass
 
 if __name__ == '__main__':
-    test_yolo()
-    # test_voc()
+    # test_yolo()
+    test_voc()
     # test_coco()
     # test_coco_to_voc()
     # test_voc_to_coco()
